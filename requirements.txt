@@ -1,0 +1,10 @@
+timm==0.6.13
+matplotlib==3.4.2
+pandas==1.5.3
+scikit-learn==1.2.0
+flake8>=3.0.0
+flake8_black>=0.2.3
+black>=21.7
+pydocstyle>=6.1.1
+open3d
+pyquaternion
