@@ -6,22 +6,36 @@ import aloscene
 
 from nndepth.blocks.update_block import BasicUpdateBlock
 from nndepth.extractors.basic_encoder import BasicEncoder
-from nndepth.disparity.models.corr import AGCL
+from nndepth.disparity.models.cost_volume.crestereo import AGCL
 
 from nndepth.blocks.pos_enc import PositionEncodingSine
 from nndepth.blocks.transformer import LocalFeatureTransformer
 
 
 class CREStereoBase(nn.Module):
+    """CreStereo: https://arxiv.org/abs/2203.11483"""
+
+    SUPPORTED_FNET_CLS = {
+        "basic_encoder": BasicEncoder,
+    }
+    SUPPORTED_UPDATE_CLS = {
+        "basic_update_block": BasicUpdateBlock
+    }
+
     def __init__(
         self,
-        fnet_cls=BasicEncoder,
-        update_cls=BasicUpdateBlock,
+        fnet_cls="basic_encoder",
+        update_cls="basic_update_block",
         max_disp=192,
+        num_fnet_channels=256,
+        hidden_dim=128,
+        context_dim=128,
+        search_num=9,
         mixed_precision=False,
         test_mode=False,
         tracing=False,
         include_preprocessing=False,
+        **kwargs,
     ):
         super(CREStereoBase, self).__init__()
 
@@ -29,25 +43,31 @@ class CREStereoBase(nn.Module):
         self.mixed_precision = mixed_precision
         self.test_mode = test_mode
 
-        self.hidden_dim = 128
-        self.context_dim = 128
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
         self.dropout = 0
         self.tracing = tracing
         self.include_preprocessing = include_preprocessing
 
-        self.fnet = fnet_cls(output_dim=256, norm_fn="instance", dropout=self.dropout)
-        self.update_block = update_cls(hidden_dim=self.hidden_dim, cor_planes=4 * 9, mask_size=4)
+        self.fnet = self.SUPPORTED_FNET_CLS[fnet_cls](
+            output_dim=num_fnet_channels, norm_fn="instance", dropout=self.dropout
+        )
+        self.update_block = self.SUPPORTED_UPDATE_CLS[update_cls](
+            hidden_dim=self.hidden_dim, cor_planes=4 * 9, spatial_scale=4
+        )
 
         # loftr
-        self.self_att_fn = LocalFeatureTransformer(d_model=256, nhead=8, layer_names=["self"] * 1, attention="linear")
+        self.self_att_fn = LocalFeatureTransformer(
+            d_model=num_fnet_channels, nhead=8, layer_names=["self"] * 1, attention="linear"
+        )
         self.cross_att_fn = LocalFeatureTransformer(
-            d_model=256, nhead=8, layer_names=["cross"] * 1, attention="linear"
+            d_model=num_fnet_channels, nhead=8, layer_names=["cross"] * 1, attention="linear"
         )
 
         # adaptive search
-        self.search_num = 9
-        self.conv_offset_16 = nn.Conv2d(256, self.search_num * 2, kernel_size=3, stride=1, padding=1)
-        self.conv_offset_8 = nn.Conv2d(256, self.search_num * 2, kernel_size=3, stride=1, padding=1)
+        self.search_num = search_num
+        self.conv_offset_16 = nn.Conv2d(num_fnet_channels, self.search_num * 2, kernel_size=3, stride=1, padding=1)
+        self.conv_offset_8 = nn.Conv2d(num_fnet_channels, self.search_num * 2, kernel_size=3, stride=1, padding=1)
         self.range_16 = 1
         self.range_8 = 1
 
@@ -296,6 +316,6 @@ class CREStereoBase(nn.Module):
 
 class CREStereo(CREStereoBase):
     def __init__(self):
-        fnet_cls = BasicEncoder
-        update_cls = BasicUpdateBlock
+        fnet_cls = "basic_encoder"
+        update_cls = "basic_update_block"
         super().__init__(fnet_cls=fnet_cls, update_cls=update_cls)

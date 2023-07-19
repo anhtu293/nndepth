@@ -2,11 +2,12 @@ from typing import List, Dict
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor
 import torch.optim as optim
+import json
 
 import alonet
 import aloscene
 
-from nndepth.disparity.models import CREStereo
+from nndepth.disparity.models import CREStereo, IGEVStereoMBNet
 from nndepth.disparity.criterion import DisparityCriterion
 
 
@@ -21,20 +22,25 @@ class LitDisparityModel(pl.LightningModule):
     @staticmethod
     def add_argparse_args(parent_parser):
         parser = parent_parser.add_argument_group("LitDisparityModule")
+        parser.add_argument("--model_config", required=True, help="Path to model json config file")
         parser.add_argument("--lr", type=float, default=4e-4, help="Learning rate")
         parser.add_argument(
             "--model_name",
             type=str.lower,
-            default="crestereo-base",
-            choices=["crestereo-base"],
+            required=True,
+            choices=["crestereo-base", "igev-mbnet"],
             help="model to use",
         )
         parser.add_argument("--iters", type=int, default=12, help="Number of refinement iterations")
         return parent_parser
 
     def build_model(self):
+        with open(self.model_config) as f:
+            config = json.load(f)
         if self.model_name == "crestereo-base":
-            model = CREStereo()
+            model = CREStereo(**config)
+        elif self.model_name == "igev-mbnet":
+            model = IGEVStereoMBNet(**config)
         return model
 
     def build_criterion(self):
@@ -90,7 +96,7 @@ class LitDisparityModel(pl.LightningModule):
         frame2 = frames["right"]
         # run forward pass model
         m_outputs = self.model(frame1, frame2, iters=self.iters)
-        loss, metrics, epe_per_iter = self.criterion(m_outputs, frame1)
+        loss, metrics, epe_per_iter = self.criterion(m_outputs, frame1, compute_per_iter=False)
         self.log("val_loss", loss.detach())
         outputs = {"val_loss": loss, "metrics": metrics, "epe_per_iter": epe_per_iter}
         return outputs
@@ -116,7 +122,7 @@ class LitDisparityModel(pl.LightningModule):
         data_loader.setup()
         metrics_callback = alonet.callbacks.MetricsCallback(val_names=data_loader.val_names)
         lr_monitor = LearningRateMonitor(logging_interval="step")
-        return [metrics_callback, disp_images_callback, lr_monitor]
+        return [metrics_callback, lr_monitor]
 
     def run_train(self, data_loader, args, project="disparity", expe_name="disparity", callbacks: List = None):
         callbacks = self.callbacks(data_loader) if callbacks is None else callbacks

@@ -20,7 +20,8 @@ docker run  --gpus all --ipc host -e LOCAL_USER_ID=$(id -u)  -it --rm  -v MOUNT_
 
 # 3. Supported algorithms and road map
 - [x] [CreStereo](https://arxiv.org/abs/2203.11483)
-- [ ] Data processing script
+- [x] [IGEV-Stereo](https://arxiv.org/pdf/2303.06615.pdf)
+- [x] Data processing script
 - [ ] Inference script and Exportation script for Stereo module
 - [ ] [MobileStereoNet](https://arxiv.org/pdf/2108.09770.pdf)
 - [ ] [SCV-STEREO](https://arxiv.org/pdf/2107.08187.pdf)
