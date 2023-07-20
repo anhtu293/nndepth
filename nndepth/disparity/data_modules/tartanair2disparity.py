@@ -12,29 +12,27 @@ class Tartanair2DisparityModel(Data2DisparityModel):
     def __init__(self, args, **kwargs):
         alonet.common.pl_helpers.params_update(self, args, kwargs)
         self.val_names = ["Tartanair"]
-        self.train_sequences = args.train_sequences
-        self.val_sequences = args.val_sequences
+        self.train_envs = args.train_envs
+        self.val_envs = args.val_envs
         super().__init__(args)
 
     def _setup_train_dataset(self):
         self.train_dataset = TartanairDataset(
-            sequences=self.train_sequences,
+            envs=self.train_envs,
             cameras=["left", "right"],
             labels=["disp"],
             sequence_size=self.sequence_size,
             transform_fn=lambda f: self.train_transform(Tartanair2DisparityModel.adapt(f)),
-            difficulties=["Easy"],
             ignore_errors=True,
         )
 
     def _setup_val_dataset(self):
         self.val_dataset = TartanairDataset(
-            sequences=self.val_sequences,
+            envs=self.val_envs,
             cameras=["left", "right"],
             labels=["disp"],
             sequence_size=self.sequence_size,
             transform_fn=lambda f: self.val_transform(Tartanair2DisparityModel.adapt(f)),
-            difficulties=["Easy"],
             ignore_errors=True,
         )
 
@@ -49,8 +47,8 @@ class Tartanair2DisparityModel(Data2DisparityModel):
         if inherit_args:
             parent_parser = super(Tartanair2DisparityModel, Tartanair2DisparityModel).add_argparse_args(parent_parser)
         parser = parent_parser.add_argument_group("Tartain2DisparityModel")
-        parser.add_argument("--train_sequences", type=str, nargs="+", default=["neighborhood"])
-        parser.add_argument("--val_sequences", type=str, nargs="+", default=["office"])
+        parser.add_argument("--train_envs", type=str, nargs="+", default=["neighborhood"])
+        parser.add_argument("--val_envs", type=str, nargs="+", default=["office"])
         return parent_parser
 
     def train_dataloader(self):
