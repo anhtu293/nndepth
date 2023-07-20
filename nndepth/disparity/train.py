@@ -124,7 +124,7 @@ class LitDisparityModel(pl.LightningModule):
         metrics_callback = alonet.callbacks.MetricsCallback(val_names=data_loader.val_names)
         lr_monitor = LearningRateMonitor(logging_interval="step")
         disp_viz = DisparityVisualizationCallback(data_loader)
-        return [metrics_callback, lr_monitor]
+        return [metrics_callback, lr_monitor, disp_viz]
 
     def run_train(self, data_loader, args, project="disparity", expe_name="disparity", callbacks: List = None):
         callbacks = self.callbacks(data_loader) if callbacks is None else callbacks
