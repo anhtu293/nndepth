@@ -24,6 +24,7 @@ class Tartanair2DisparityModel(Data2DisparityModel):
             sequence_size=self.sequence_size,
             transform_fn=lambda f: self.train_transform(Tartanair2DisparityModel.adapt(f)),
             difficulties=["Easy"],
+            ignore_errors=True,
         )
 
     def _setup_val_dataset(self):
@@ -34,6 +35,7 @@ class Tartanair2DisparityModel(Data2DisparityModel):
             sequence_size=self.sequence_size,
             transform_fn=lambda f: self.val_transform(Tartanair2DisparityModel.adapt(f)),
             difficulties=["Easy"],
+            ignore_errors=True,
         )
 
     @classmethod
