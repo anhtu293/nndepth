@@ -18,7 +18,15 @@ docker build -t nndepth .
 docker run  --gpus all --ipc host -e LOCAL_USER_ID=$(id -u)  -it --rm  -v MOUNT_YOUR_DISK  --privileged -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix IMAGE_ID
 ```
 
-# 3. Supported algorithms and road map
+# 3. Modules
+- The project is organized in different modules:
+    - **blocks**: basic neural network blocks. Some blocks can be found: attention block, positional encoding, residual blocks, transformer, update block for RAFT-based models.
+    - **datasets**: Data loader classes.
+    - **disparity**: Module to train - inference different neural networks for Stereo depth estimation.
+    - **extractors**: Backbones.
+
+
+# Supported algorithms and road map
 - [x] [CreStereo](https://arxiv.org/abs/2203.11483)
 - [x] [IGEV-Stereo](https://arxiv.org/pdf/2303.06615.pdf)
 - [x] Data processing script
@@ -29,5 +37,5 @@ docker run  --gpus all --ipc host -e LOCAL_USER_ID=$(id -u)  -it --rm  -v MOUNT_
 - [ ] Lightweight Metric Monocular Depth Estimation based on [ZoeDepth](https://arxiv.org/abs/2302.12288)
 
 
-# 4. Acknowledgements
+# Acknowledgements
 - [CreStereo](https://github.com/megvii-research/CREStereo)
