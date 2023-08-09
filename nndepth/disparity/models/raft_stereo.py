@@ -5,22 +5,19 @@ from typing import Dict
 
 import aloscene
 
-from nndepth.extractors.mobilenetv3_encoder import MobilenetV3LargeEncoder
-from nndepth.blocks.update_block import BasicUpdateBlock
-from nndepth.disparity.models.cost_volume.igev import GeometryAwareCostVolume, CostVolumeFilterNetwork
+from nndepth.blocks.rep_vit import RepViTBlock
+from nndepth.extractors.hp_rep_vit import HPNet
+from nndepth.extractors.basic_encoder import BasicEncoder
+from nndepth.blocks.update_block import BasicUpdateBlock, HorizontalPreservedUpdateBlock
+from nndepth.disparity.models.cost_volume.raft_stereo import CorrBlock1D
 
 
-class IGEVStereoBase(nn.Module):
-    """IGEV Stereo: https://arxiv.org/pdf/2303.06615.pdf"""
-
-    SUPPORTED_UPDATE_CLS = {
-        "basic_update_block": BasicUpdateBlock
-    }
+class RAFTStereo(nn.Module):
+    """RAFT-Stereo: https://arxiv.org/pdf/2109.07547.pdf
+    """
 
     def __init__(
             self,
-            update_cls="basic_update_block",
-            cv_groups=8,
             hidden_dim=128,
             context_dim=128,
             corr_levels=4,
@@ -28,23 +25,15 @@ class IGEVStereoBase(nn.Module):
             tracing=False,
             include_preprocessing=False,
     ):
-        super(IGEVStereoBase, self).__init__()
+        super().__init__()
         self.fnet = self._init_fnet()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
-        self.cv_groups = cv_groups
         self.corr_levels = corr_levels
         self.corr_radius = corr_radius
 
-        self.update_block = self.SUPPORTED_UPDATE_CLS[update_cls](
-            hidden_dim=self.hidden_dim,
-            flow_channel=1,
-            cor_planes=corr_levels * (corr_radius * 2 + 1) * self.cv_groups * 2,
-            spatial_scale=4,
-        )
-        self.cv_regularizer = self._init_cost_volume_filter()
-        self.corr_fn = GeometryAwareCostVolume
-        self.cv_squeezer = nn.Conv3d(self.cv_groups, 1, 3, 1, 1)
+        self.update_block = self._init_update_block()
+        self.corr_fn = CorrBlock1D
 
         # onnx exportation argument
         self.tracing = tracing
@@ -53,7 +42,7 @@ class IGEVStereoBase(nn.Module):
     def _init_fnet(self):
         raise NotImplementedError("Must be implemented in child class")
 
-    def _init_cost_volume_filter(self):
+    def _init_update_block(self):
         raise NotImplementedError("Must be implemented in child class")
 
     def _preprocess_input(self, frame1: aloscene.Frame, frame2: aloscene.Frame):
@@ -91,11 +80,6 @@ class IGEVStereoBase(nn.Module):
         _y = torch.zeros([N, 1, H, W], dtype=torch.float32)
         zero_flow = torch.cat((_x, _y), dim=1).to(fmap.device)
         return zero_flow
-
-    def regress_disparity(self, distribution: torch.Tensor, width: int):
-        disp = torch.arange(0, width, dtype=distribution.dtype, device=distribution.device)
-        disp = disp.reshape(1, -1, 1, 1)
-        return -torch.sum(disp * distribution, dim=1, keepdim=True)
 
     @torch.no_grad()
     def inference(self, m_outputs: Dict[str, torch.Tensor], only_last=False):
@@ -144,7 +128,7 @@ class IGEVStereoBase(nn.Module):
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
         # forward backbone. This method must return fmap1, fmap2, cnet and guide_features(needed to guide cost volume)
-        fmap1, fmap2, cnet1, guide_features = self.forward_fnet(frame1, frame2)
+        fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
         fnet_ds = frame1.shape[-1] // fmap1.shape[-1]
         fmap1 = fmap1.float()
         fmap2 = fmap2.float()
@@ -154,17 +138,9 @@ class IGEVStereoBase(nn.Module):
         net = torch.tanh(net)
         inp = F.relu(inp)
 
-        corr = self.corr_fn(
-            fmap1, fmap2, guide_features, self.cv_regularizer, self.corr_levels, self.corr_radius, self.cv_groups
-        )
-        B, _, H1, W1 = fmap1.shape
-        W2 = fmap2.shape[-1]
-        geo_aware_cv = corr.geo_aware_cv[0].reshape(B, self.cv_groups, H1, W1, W2).permute(0, 1, 4, 2, 3)
-        dist_disparity = F.softmax(self.cv_squeezer(geo_aware_cv).squeeze(1), dim=1)
-        init_disparity = self.regress_disparity(dist_disparity, fmap1.shape[-1])
+        corr = self.corr_fn(fmap1, fmap2, self.corr_levels, self.corr_radius)
 
         coords1 = self.initialize_coords(fmap1)
-        coords1 = coords1 + init_disparity
 
         m_outputs = []
         for _ in range(iters):
@@ -178,35 +154,100 @@ class IGEVStereoBase(nn.Module):
         return m_outputs
 
 
-class IGEVStereoMBNet(IGEVStereoBase):
-    """IGEV Stereo with MobileNetV3 Large as backbone
+class BaseRAFTStereo(RAFTStereo):
+    """Original RAFT Stereo presented in the paper
     """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.fnet_proj = nn.Sequential(
-            nn.Conv2d(24, self.hidden_dim * 2, 3, 1, 1),
-            nn.ReLU(False),
-        )
-        self.cnet_proj = nn.Sequential(
-            nn.Conv2d(24, self.context_dim * 2, 3, 1, 1),
-            nn.ReLU(False),
-        )
-
     def _init_fnet(self):
-        return MobilenetV3LargeEncoder(pretrained=True, feature_hooks=[1, 2, 3, 4, 5])
+        return BasicEncoder()
 
-    def _init_cost_volume_filter(self):
-        return CostVolumeFilterNetwork(self.cv_groups, [40, 80, 160])
+    def _init_update_block(self):
+        return BasicUpdateBlock(
+            hidden_dim=self.hidden_dim,
+            cor_planes=self.corr_levels * (self.corr_radius * 2 + 1),
+            flow_channel=1,
+            context_dim=self.context_dim,
+            spatial_scale=8
+        )
 
     def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
         B = frame1.shape[0]
-        frames = torch.cat([frame1, frame2], dim=0)
-        features = self.fnet(frames)
-        fmaps = features[0]
-        cnet1 = self.cnet_proj(torch.split(fmaps.clone(), B, dim=0)[0])
-        fmaps = self.fnet_proj(fmaps)
-        fmap1, fmap2 = torch.split(fmaps, B, dim=0)
+        x = self.fnet([frame1, frame2])
+        fmap1, fmap2 = torch.split(x, [B, B], dim=0)
+        cnet = fmap1.clone()
+        return fmap1, fmap2, cnet
 
-        guide_features = [features[1], features[2], features[4]]
-        guide_features = [torch.split(f, B, dim=0)[0] for f in guide_features]
-        return fmap1, fmap2, cnet1, guide_features
+
+class HPRAFTStereo(RAFTStereo):
+    """Preserved horizontal axis while reducing vertical dim
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.cnet_proj = RepViTBlock(256, self.context_dim * 2, exp_ratio=2.0)
+
+    def _init_fnet(self):
+        return HPNet(num_blocks_per_stage=[1, 2, 6, 4], width_multipliers=[1, 1, 1, 1])
+
+    def _init_update_block(self):
+        return HorizontalPreservedUpdateBlock(
+            hidden_dim=self.hidden_dim,
+            cor_planes=self.corr_levels * (self.corr_radius * 2 + 1),
+            flow_channel=1,
+            context_dim=self.context_dim,
+            spatial_scale=(32, 4)
+        )
+
+    def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
+        B = frame1.shape[0]
+        x = self.fnet(torch.cat([frame1, frame2], axis=0))[-1]
+        fmap1, fmap2 = torch.split(x, [B, B], dim=0)
+        cnet = fmap1.clone()
+        cnet = self.cnet_proj(cnet)
+        return fmap1, fmap2, cnet
+
+    def convex_upsample(self, flow, mask, rate=(8, 8)):
+        """Upsample flow field [H/N, W/M, 1] -> [H, W, 1] using convex combination"""
+        N, _, H, W = flow.shape
+        mask = mask.view(N, 1, 9, rate[0], rate[1], H, W)
+        mask = torch.softmax(mask, dim=2)
+
+        up_flow = F.unfold(rate[1] * flow, [3, 3], padding=1)
+        up_flow = up_flow.view(N, 1, 9, 1, 1, H, W)
+
+        up_flow = torch.sum(mask * up_flow, dim=2)
+        up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)
+        return up_flow.reshape(N, 1, rate[0] * H, rate[1] * W)
+
+    def forward(
+        self,
+        frame1: aloscene.Frame,
+        frame2: aloscene.Frame,
+        iters=12,
+        **kwargs
+    ):
+        frame1, frame2 = self._preprocess_input(frame1, frame2)
+
+        # forward backbone. This method must return fmap1, fmap2, cnet and guide_features(needed to guide cost volume)
+        fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
+        fnet_ds = (frame1.shape[-2] // fmap1.shape[-2], frame1.shape[-1] // fmap1.shape[-1])
+        fmap1 = fmap1.float()
+        fmap2 = fmap2.float()
+
+        C = cnet1.shape[1]
+        net, inp = torch.split(cnet1, C // 2, dim=1)
+        net = torch.tanh(net)
+        inp = F.relu(inp)
+
+        corr = self.corr_fn(fmap1, fmap2, self.corr_levels, self.corr_radius)
+
+        coords1 = self.initialize_coords(fmap1)
+
+        m_outputs = []
+        for _ in range(iters):
+            coords1 = coords1.detach()
+            sampled_corr = corr(coords1)
+            net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1)
+            coords1 = coords1 + delta_disp
+            up_disp = self.convex_upsample(coords1, mask, rate=fnet_ds)
+            m_outputs.append({"up_flow": up_disp})
+
+        return m_outputs

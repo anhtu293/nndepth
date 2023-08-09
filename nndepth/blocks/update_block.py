@@ -2,9 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from nndepth.blocks.rep_vit import RepViTBlock
 
-# Ref: https://github.com/princeton-vl/RAFT/blob/master/core/update.py
+
 class FlowHead(nn.Module):
+    """Ref: https://github.com/princeton-vl/RAFT/blob/master/core/update.py
+    """
     def __init__(self, input_dim=128, hidden_dim=256, flow_channel=2):
         super(FlowHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
@@ -45,14 +48,14 @@ class SepConvGRU(nn.Module):
 
 
 class BasicMotionEncoder(nn.Module):
-    def __init__(self, cor_planes, flow_channel=2):
+    def __init__(self, cor_planes, hidden_dim=128, flow_channel=2):
         super(BasicMotionEncoder, self).__init__()
 
         self.convc1 = nn.Conv2d(cor_planes, 256, 1, padding=0)
         self.convc2 = nn.Conv2d(256, 192, 3, padding=1)
         self.convf1 = nn.Conv2d(flow_channel, 128, 7, padding=3)
         self.convf2 = nn.Conv2d(128, 64, 3, padding=1)
-        self.conv = nn.Conv2d(64 + 192, 128 - flow_channel, 3, padding=1)
+        self.conv = nn.Conv2d(64 + 192, hidden_dim - flow_channel, 3, padding=1)
 
     def forward(self, flow, corr):
         cor = F.relu(self.convc1(corr))
@@ -66,11 +69,11 @@ class BasicMotionEncoder(nn.Module):
 
 
 class BasicUpdateBlock(nn.Module):
-    def __init__(self, hidden_dim, cor_planes, flow_channel=2, spatial_scale=8):
+    def __init__(self, hidden_dim, cor_planes, context_dim=128, flow_channel=2, spatial_scale=8):
         super(BasicUpdateBlock, self).__init__()
 
         self.encoder = BasicMotionEncoder(cor_planes, flow_channel)
-        self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=128 + hidden_dim)
+        self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=context_dim + hidden_dim)
         self.flow_head = FlowHead(hidden_dim, hidden_dim=hidden_dim, flow_channel=flow_channel)
 
         self.mask = nn.Sequential(
@@ -83,6 +86,48 @@ class BasicUpdateBlock(nn.Module):
         # print(inp.shape, corr.shape, flow.shape)
         motion_features = self.encoder(flow, corr)
         # print(motion_features.shape, inp.shape)
+        inp = torch.cat((inp, motion_features), dim=1)
+
+        net = self.gru(net, inp)
+        delta_flow = self.flow_head(net)
+
+        # scale mask to balence gradients
+        mask = 0.25 * self.mask(net)
+        return net, mask, delta_flow
+
+
+class RepViTConvGRU(nn.Module):
+    def __init__(self, hidden_dim=128, input_dim=192 + 128):
+        super(RepViTConvGRU, self).__init__()
+        self.convz = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(3, 3), dw_padding=(1, 1))
+        self.convr = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(3, 3), dw_padding=(1, 1))
+        self.convq = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(3, 3), dw_padding=(1, 1))
+
+    def forward(self, h, x):
+        hx = torch.cat([h, x], dim=1)
+        z = torch.sigmoid(self.convz(hx))
+        r = torch.sigmoid(self.convr(hx))
+        q = torch.tanh(self.convq(torch.cat([r * h, x], dim=1)))
+        h = (1 - z) * h + z * q
+        return h
+
+
+class HorizontalPreservedUpdateBlock(nn.Module):
+    def __init__(self, hidden_dim, cor_planes, context_dim=128, flow_channel=1, spatial_scale=(8, 8)):
+        super(HorizontalPreservedUpdateBlock, self).__init__()
+
+        self.encoder = BasicMotionEncoder(cor_planes, hidden_dim, flow_channel)
+        self.gru = RepViTConvGRU(hidden_dim=hidden_dim, input_dim=context_dim + hidden_dim)
+        self.flow_head = FlowHead(hidden_dim, hidden_dim=hidden_dim, flow_channel=flow_channel)
+
+        self.mask = nn.Sequential(
+            nn.Conv2d(hidden_dim, hidden_dim * 2, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden_dim * 2, spatial_scale[0] * spatial_scale[1] * 9, 1, padding=0),
+        )
+
+    def forward(self, net, inp, corr, flow, upsample=True):
+        motion_features = self.encoder(flow, corr)
         inp = torch.cat((inp, motion_features), dim=1)
 
         net = self.gru(net, inp)

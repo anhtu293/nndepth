@@ -7,7 +7,7 @@ import json
 import alonet
 import aloscene
 
-from nndepth.disparity.models import CREStereo, IGEVStereoMBNet
+from nndepth.disparity import MODELS
 from nndepth.disparity.criterion import DisparityCriterion
 from nndepth.disparity.callbacks import DisparityVisualizationCallback
 
@@ -29,7 +29,7 @@ class LitDisparityModel(pl.LightningModule):
             "--model_name",
             type=str.lower,
             required=True,
-            choices=["crestereo-base", "igev-mbnet"],
+            choices=["crestereo-base", "igev-mbnet", "raft-base", "raft-hp"],
             help="model to use",
         )
         parser.add_argument("--iters", type=int, default=12, help="Number of refinement iterations")
@@ -38,10 +38,7 @@ class LitDisparityModel(pl.LightningModule):
     def build_model(self):
         with open(self.model_config) as f:
             config = json.load(f)
-        if self.model_name == "crestereo-base":
-            model = CREStereo(**config)
-        elif self.model_name == "igev-mbnet":
-            model = IGEVStereoMBNet(**config)
+        model = MODELS[self.model_name](**config)
         return model
 
     def build_criterion(self):
