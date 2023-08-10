@@ -103,6 +103,10 @@ class RepViTSepConvGRU(nn.Module):
         self.convr1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
         self.convq1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
 
+        self.convz2 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(5, 1), dw_padding=(2, 0))
+        self.convr2 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(5, 1), dw_padding=(2, 0))
+        self.convq2 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(5, 1), dw_padding=(2, 0))
+
     def forward(self, h, x):
         # horizontal
         hx = torch.cat([h, x], dim=1)
