@@ -59,25 +59,28 @@ class RepViTBlock(nn.Module):
         self.act_fn = act_fn
 
         # Depth-wise convolution
-        self.conv_dw = nn.Conv2d(
-            in_channels,
-            in_channels,
-            dw_kernel_size,
-            stride=stride,
-            padding=dw_padding,
-            groups=in_channels,
+        self.conv_dw = nn.Sequential(
+            nn.Conv2d(
+                in_channels,
+                in_channels,
+                dw_kernel_size,
+                stride=stride,
+                padding=dw_padding,
+                groups=in_channels,
+            ),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
         )
-        self.bn_dw = nn.BatchNorm2d(in_channels)
-        self.act_dw = nn.ReLU(inplace=True)
+        self.conv2_dw = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
 
         # Squeeze-and-excitation
         if se_block:
-            self.se = SEBlock(in_channels)
+            self.se = SEBlock(out_channels)
         else:
             self.se = None
 
         # Point-wise expansion
-        self.conv_pw1 = nn.Conv2d(in_channels, mid_channels, kernel_size, stride=1, padding=padding, bias=False)
+        self.conv_pw1 = nn.Conv2d(out_channels, mid_channels, kernel_size, stride=1, padding=padding, bias=False)
         self.bn_pw1 = nn.BatchNorm2d(mid_channels)
         # self.act1 = nn.ReLU(inplace=True)
 
@@ -89,21 +92,22 @@ class RepViTBlock(nn.Module):
     def forward(self, x: torch.Tensor):
         # Depth-wise convolution
         x = self.conv_dw(x)
-        x = self.bn_dw(x)
-        x = self.act_dw(x)
+        x = self.conv2_dw(x)
 
         # Squeeze-and-excitation
         if self.se is not None:
             x = self.se(x)
 
         # Point-wise expansion
-        x = self.conv_pw1(x)
-        x = self.bn_pw1(x)
-        x = self.act_fn(x)
+        x_pw = self.conv_pw1(x)
+        x_pw = self.bn_pw1(x_pw)
+        x_pw = self.act_fn(x_pw)
 
         # Point-wise linear projection
-        x = self.conv_pw2(x)
-        x = self.bn_pw2(x)
-        x = self.act_pw2(x)
+        x_pw = self.conv_pw2(x_pw)
+        x_pw = self.bn_pw2(x_pw)
+        x_pw = self.act_pw2(x_pw)
+
+        x = x + x_pw
 
         return x

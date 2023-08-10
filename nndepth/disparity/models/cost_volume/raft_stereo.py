@@ -17,11 +17,11 @@ class CorrBlock1D:
         corr = CorrBlock1D.corr(fmap1, fmap2)
 
         batch, h1, w1, w2 = corr.shape
-        corr = corr.reshape(batch * h1 * w1, 1, 1, w2)
+        corr = corr.reshape(batch * h1 * w1, 1, w2)
 
         self.corr_pyramid.append(corr)
         for i in range(self.num_levels):
-            corr = F.avg_pool2d(corr, [1, 2], stride=[1, 2])
+            corr = F.avg_pool1d(corr, 2)
             self.corr_pyramid.append(corr)
 
     def __call__(self, coords: torch.Tensor):
@@ -34,7 +34,7 @@ class CorrBlock1D:
             corr = corr.reshape(batch * h1 * w1, -1)
             dx = torch.linspace(-r, r, 2 * r + 1)
             dx = dx.view(1, 2 * r + 1).to(coords.device)
-            coords_lvl = dx + coords.reshape(batch * h1 * w1, 1, ) / 2 ** i
+            coords_lvl = dx + coords.reshape(batch * h1 * w1, 1) / 2 ** i
 
             corr = linear_sampler(corr, coords_lvl)
             corr = corr.view(batch, h1, w1, -1)

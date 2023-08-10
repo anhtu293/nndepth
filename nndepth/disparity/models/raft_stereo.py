@@ -99,7 +99,7 @@ class RAFTStereo(nn.Module):
         coords = coords[None, None, None, :].repeat(B, 1, H, 1)
         return coords
 
-    def convex_upsample(self, flow, mask, rate=4):
+    def convex_upsample(self, flow, mask, rate=8):
         """Upsample flow field [H/8, W/8, 2] -> [H, W, 2] using convex combination"""
         N, _, H, W = flow.shape
         # print(flow.shape, mask.shape, rate)
@@ -127,9 +127,10 @@ class RAFTStereo(nn.Module):
     ):
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
-        # forward backbone. This method must return fmap1, fmap2, cnet and guide_features(needed to guide cost volume)
+        # forward backbone. This method must return fmap1, fmap2, cnet
         fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
         fnet_ds = frame1.shape[-1] // fmap1.shape[-1]
+
         fmap1 = fmap1.float()
         fmap2 = fmap2.float()
 
@@ -170,9 +171,7 @@ class BaseRAFTStereo(RAFTStereo):
         )
 
     def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
-        B = frame1.shape[0]
-        x = self.fnet([frame1, frame2])
-        fmap1, fmap2 = torch.split(x, [B, B], dim=0)
+        fmap1, fmap2 = self.fnet([frame1, frame2])
         cnet = fmap1.clone()
         return fmap1, fmap2, cnet
 
@@ -226,7 +225,7 @@ class HPRAFTStereo(RAFTStereo):
     ):
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
-        # forward backbone. This method must return fmap1, fmap2, cnet and guide_features(needed to guide cost volume)
+        # forward backbone. This method must return fmap1, fmap2, cnet
         fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
         fnet_ds = (frame1.shape[-2] // fmap1.shape[-2], frame1.shape[-1] // fmap1.shape[-1])
         fmap1 = fmap1.float()
