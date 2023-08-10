@@ -99,15 +99,23 @@ class BasicUpdateBlock(nn.Module):
 class RepViTSepConvGRU(nn.Module):
     def __init__(self, hidden_dim=128, input_dim=192 + 128):
         super(RepViTSepConvGRU, self).__init__()
-        self.convz1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(3, 3), dw_padding=(1, 1))
-        self.convr1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(3, 3), dw_padding=(1, 1))
-        self.convq1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(3, 3), dw_padding=(1, 1))
+        self.convz1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
+        self.convr1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
+        self.convq1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
 
     def forward(self, h, x):
+        # horizontal
         hx = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz1(hx))
         r = torch.sigmoid(self.convr1(hx))
         q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
+        h = (1 - z) * h + z * q
+
+        # vertical
+        hx = torch.cat([h, x], dim=1)
+        z = torch.sigmoid(self.convz2(hx))
+        r = torch.sigmoid(self.convr2(hx))
+        q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
         h = (1 - z) * h + z * q
 
         return h
