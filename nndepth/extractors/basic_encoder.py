@@ -27,7 +27,7 @@ class BasicEncoder(nn.Module):
         self.in_planes = 64
         self.layer1 = self._make_layer(64, stride=1)
         self.layer2 = self._make_layer(96, stride=2)
-        self.layer3 = self._make_layer(128, stride=1)
+        self.layer3 = self._make_layer(128, stride=2)
 
         # output convolution
         self.conv2 = nn.Conv2d(128, output_dim, kernel_size=1)

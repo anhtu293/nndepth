@@ -1,0 +1,8 @@
+{
+    "hidden_dim": 64,
+    "context_dim": 64,
+    "corr_levels": 4,
+    "corr_radius": 4,
+    "tracing": false,
+    "include_preprocessing": false
+}

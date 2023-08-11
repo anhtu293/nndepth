@@ -77,6 +77,23 @@ LitDisparityModule:
 
 # 3. Supported models
 <details>
+  <summary><b> RAFT-Stereo</b></summary>
+
+  ## Architecture
+  - Detail at [RAFT-Stereo](https://arxiv.org/pdf/2109.07547.pdf)
+  <p align="center">
+  <img src="../../images/raftstereo.png"/>
+  </p>
+
+- `ResNet50` & `RepViT` are used as backbone.
+
+  ## Training command
+  ```bash
+  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_name raft-hp --model_config nndepth/disparity/models/configs/HPRAFTStereo.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 1e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 150000 --HW 480 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
+  ```
+</details>
+
+<details>
   <summary><b> CreStereo</b></summary>
 
   ## Architecture
