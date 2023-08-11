@@ -27,6 +27,7 @@ docker run  --gpus all --ipc host -e LOCAL_USER_ID=$(id -u)  -it --rm  -v MOUNT_
 
 
 # Supported algorithms and road map
+- [x] [RAFT-Stereo](https://arxiv.org/pdf/2109.07547.pdf)
 - [x] [CreStereo](https://arxiv.org/abs/2203.11483)
 - [x] [IGEV-Stereo](https://arxiv.org/pdf/2303.06615.pdf)
 - [x] Data processing script
