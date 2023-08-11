@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nndepth.blocks.rep_vit import RepViTBlock
+from nndepth.blocks.gru import SepConvGRU, ConvGRU
 
 
 class FlowHead(nn.Module):
@@ -16,35 +16,6 @@ class FlowHead(nn.Module):
 
     def forward(self, x):
         return self.conv2(self.relu(self.conv1(x)))
-
-
-class SepConvGRU(nn.Module):
-    def __init__(self, hidden_dim=128, input_dim=192 + 128):
-        super(SepConvGRU, self).__init__()
-        self.convz1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (1, 5), padding=(0, 2))
-        self.convr1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (1, 5), padding=(0, 2))
-        self.convq1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (1, 5), padding=(0, 2))
-
-        self.convz2 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (5, 1), padding=(2, 0))
-        self.convr2 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (5, 1), padding=(2, 0))
-        self.convq2 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (5, 1), padding=(2, 0))
-
-    def forward(self, h, x):
-        # horizontal
-        hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(self.convz1(hx))
-        r = torch.sigmoid(self.convr1(hx))
-        q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
-        h = (1 - z) * h + z * q
-
-        # vertical
-        hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(self.convz2(hx))
-        r = torch.sigmoid(self.convr2(hx))
-        q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
-        h = (1 - z) * h + z * q
-
-        return h
 
 
 class BasicMotionEncoder(nn.Module):
@@ -96,41 +67,12 @@ class BasicUpdateBlock(nn.Module):
         return net, mask, delta_flow
 
 
-class RepViTSepConvGRU(nn.Module):
-    def __init__(self, hidden_dim=128, input_dim=192 + 128):
-        super(RepViTSepConvGRU, self).__init__()
-        self.convz1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
-        self.convr1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
-        self.convq1 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(1, 5), dw_padding=(0, 2))
-
-        self.convz2 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(5, 1), dw_padding=(2, 0))
-        self.convr2 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(5, 1), dw_padding=(2, 0))
-        self.convq2 = RepViTBlock(hidden_dim + input_dim, hidden_dim, dw_kernel_size=(5, 1), dw_padding=(2, 0))
-
-    def forward(self, h, x):
-        # horizontal
-        hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(self.convz1(hx))
-        r = torch.sigmoid(self.convr1(hx))
-        q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
-        h = (1 - z) * h + z * q
-
-        # vertical
-        hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(self.convz2(hx))
-        r = torch.sigmoid(self.convr2(hx))
-        q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
-        h = (1 - z) * h + z * q
-
-        return h
-
-
 class HorizontalPreservedUpdateBlock(nn.Module):
     def __init__(self, hidden_dim, cor_planes, context_dim=128, flow_channel=1, spatial_scale=(8, 8)):
         super(HorizontalPreservedUpdateBlock, self).__init__()
 
         self.encoder = BasicMotionEncoder(cor_planes, hidden_dim, flow_channel)
-        self.gru = RepViTSepConvGRU(hidden_dim=hidden_dim, input_dim=context_dim + hidden_dim)
+        self.gru = ConvGRU(hidden_dim=hidden_dim, input_dim=context_dim + hidden_dim)
         self.flow_head = FlowHead(hidden_dim, hidden_dim=hidden_dim, flow_channel=flow_channel)
 
         self.mask = nn.Sequential(
