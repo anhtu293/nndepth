@@ -184,7 +184,7 @@ class HPRAFTStereo(RAFTStereo):
         self.cnet_proj = RepViTBlock(256, self.context_dim * 2, exp_ratio=2.0)
 
     def _init_fnet(self):
-        return HPNet(num_blocks_per_stage=[1, 3, 10, 4], width_multipliers=[1, 1, 1, 1])
+        return HPNet(num_blocks_per_stage=[1, 2, 8, 4], width_multipliers=[1, 1, 1, 1])
 
     def _init_update_block(self):
         return HorizontalPreservedUpdateBlock(

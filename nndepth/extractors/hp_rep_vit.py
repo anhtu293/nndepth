@@ -35,7 +35,7 @@ class HPNet(nn.Module):
             num_blocks=num_blocks_per_stage[0],
             num_se_blocks=0,
             kernel_size=1,
-            stride=(2, 1),
+            stride=(1, 1),
             padding=0,
             dw_kernel_size=3,
             dw_padding=1,
@@ -64,7 +64,7 @@ class HPNet(nn.Module):
         self.stage_3 = self._make_stage(
             channels=int(self.BASE_NUM_CHANNELS[3] * width_multipliers[3]),
             num_blocks=num_blocks_per_stage[3],
-            stride=(1, 1),
+            stride=(2, 1),
             num_se_blocks=num_blocks_per_stage[3],
             exp_ratio=2.0,
             kernel_size=1,
