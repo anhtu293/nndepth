@@ -71,7 +71,6 @@ class RepViTBlock(nn.Module):
                 groups=in_channels,
             ),
             nn.BatchNorm2d(in_channels),
-            nn.ReLU(inplace=True),
         )
         self.conv_dw_proj = nn.Sequential(
             nn.Conv2d(
@@ -83,7 +82,6 @@ class RepViTBlock(nn.Module):
                 groups=in_channels,
             ),
             nn.BatchNorm2d(in_channels),
-            nn.ReLU(inplace=True),
         )
         self.conv2_dw = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
 
@@ -107,7 +105,7 @@ class RepViTBlock(nn.Module):
         # Depth-wise convolution
         x1 = self.conv_dw(x)
         x2 = self.conv_dw_proj(x)
-        x = x1 + x2
+        x = F.relu(x1 + x2)
         x = self.conv2_dw(x)
 
         # Squeeze-and-excitation

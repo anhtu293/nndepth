@@ -17,17 +17,27 @@ class HPNet(nn.Module):
         self.num_blocks_per_stage = num_blocks_per_stage
         self.width_multipliers = width_multipliers
 
-        self.stem_1 = nn.Sequential(
+        self.stem_1_1 = nn.Sequential(
             nn.Conv2d(3, 8, kernel_size=3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(8),
-            nn.ReLU(inplace=False),
         )
-
-        self.stem_2 = nn.Sequential(
-            nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1, bias=False),
+        self.stem_1_2 = nn.Sequential(
+            nn.Conv2d(3, 8, kernel_size=1, stride=2, padding=0, bias=False),
+            nn.BatchNorm2d(8),
+        )
+        self.stem_2_1 = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1, bias=False, groups=16),
             nn.BatchNorm2d(16),
-            nn.ReLU(inplace=False),
         )
+        self.stem_2_2 = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size=1, stride=2, padding=0, bias=False, groups=16),
+            nn.BatchNorm2d(16),
+        )
+        self.stem_3_1 = nn.Sequential(
+            nn.Conv2d(16, 16, kernel_size=1, stride=2, padding=0, bias=False, groups=16),
+            nn.BatchNorm2d(16),
+        )
+        self.stem_3_2 = nn.BatchNorm2d(16)
 
         self.num_channels = 16
         self.stage_0 = self._make_stage(
@@ -106,7 +116,25 @@ class HPNet(nn.Module):
 
     def forward(self, x: torch.Tensor):
         features = []
-        for layer in [self.stem_1, self.stem_2, self.stage_0, self.stage_1, self.stage_2, self.stage_3]:
+
+        # stem 1
+        s1_1 = self.stem_1_1(x)
+        s1_2 = self.stem_1_2(x)
+        x = F.relu(s1_1 + s1_2)
+        features.append(x)
+
+        # stem 2
+        s2_1 = self.stem_2_1(x)
+        s2_2 = self.stem_2_2(x)
+        x = F.relu(s2_1 + s2_2)
+
+        # stem 3
+        s3_1 = self.stem_3_1(x)
+        s3_2 = self.stem_3_2(x)
+        x = F.relu(s3_1 + s3_2)
+        features.append(x)
+
+        for layer in [self.stage_0, self.stage_1, self.stage_2, self.stage_3]:
             x = layer(x)
             features.append(x)
 
