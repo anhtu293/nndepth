@@ -26,20 +26,20 @@ class HPNet(nn.Module):
             nn.BatchNorm2d(8),
         )
         self.stem_2_1 = nn.Sequential(
-            nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1, bias=False, groups=16),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(8, 8, kernel_size=3, stride=2, padding=1, bias=False, groups=8),
+            nn.BatchNorm2d(8),
         )
         self.stem_2_2 = nn.Sequential(
-            nn.Conv2d(8, 16, kernel_size=1, stride=2, padding=0, bias=False, groups=16),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(8, 8, kernel_size=1, stride=2, padding=0, bias=False, groups=8),
+            nn.BatchNorm2d(8),
         )
         self.stem_3_1 = nn.Sequential(
-            nn.Conv2d(16, 16, kernel_size=1, stride=2, padding=0, bias=False, groups=16),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(8, 8, kernel_size=1, stride=1, padding=0, bias=False, groups=8),
+            nn.BatchNorm2d(8),
         )
-        self.stem_3_2 = nn.BatchNorm2d(16)
+        self.stem_3_2 = nn.BatchNorm2d(8)
 
-        self.num_channels = 16
+        self.num_channels = 8
         self.stage_0 = self._make_stage(
             channels=int(self.BASE_NUM_CHANNELS[0] * width_multipliers[0]),
             num_blocks=num_blocks_per_stage[0],
