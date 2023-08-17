@@ -29,7 +29,7 @@ class LitDisparityModel(pl.LightningModule):
             "--model_name",
             type=str.lower,
             required=True,
-            choices=["crestereo-base", "igev-mbnet", "raft-base", "raft-hp"],
+            choices=["crestereo-base", "igev-mbnet", "raft-base", "raft-hp", "raft-hp-group"],
             help="model to use",
         )
         parser.add_argument("--iters", type=int, default=12, help="Number of refinement iterations")

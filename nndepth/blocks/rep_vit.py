@@ -53,10 +53,12 @@ class RepViTBlock(nn.Module):
         dw_padding: Union[int, Tuple[int, int]] = 1,
         stride: Union[int, Tuple[int, int]] = 1,
         se_block: bool = False,
+        inference=False,
     ):
         super().__init__()
         mid_channels = int(in_channels * exp_ratio)
         self.act_fn = act_fn
+        self.inference = inference
 
         # Depth-wise convolution
         self.conv_dw = nn.Sequential(
@@ -69,7 +71,17 @@ class RepViTBlock(nn.Module):
                 groups=in_channels,
             ),
             nn.BatchNorm2d(in_channels),
-            nn.ReLU(inplace=True),
+        )
+        self.conv_dw_proj = nn.Sequential(
+            nn.Conv2d(
+                in_channels,
+                in_channels,
+                1,
+                stride=stride,
+                padding=0,
+                groups=in_channels,
+            ),
+            nn.BatchNorm2d(in_channels),
         )
         self.conv2_dw = nn.Conv2d(in_channels, out_channels, 1, 1, 0)
 
@@ -91,7 +103,9 @@ class RepViTBlock(nn.Module):
 
     def forward(self, x: torch.Tensor):
         # Depth-wise convolution
-        x = self.conv_dw(x)
+        x1 = self.conv_dw(x)
+        x2 = self.conv_dw_proj(x)
+        x = F.relu(x1 + x2)
         x = self.conv2_dw(x)
 
         # Squeeze-and-excitation
