@@ -75,7 +75,55 @@ LitDisparityModule:
 ```
 - Details of models and how to run the training with those models are below.
 
-# 3. Supported models
+## 3. How to launch the inference
+- Script `nndepth/disparity/scripts/inference.py`:
+```
+options:
+  -h, --help            show this help message and exit
+  --weight WEIGHT     Path to model weight
+  --left_path LEFT_PATH
+                        Path to directory of left images
+  --right_path RIGHT_PATH
+                        Path to directory of right images
+  --output OUTPUT       Path to save output. Directory in case of save_format == image, mp4 file in case of video
+  --render              Render results
+  --save_format {image,video}
+                        Which format to save output. image or video are supported. Default: video
+
+LitDisparityModule:
+  --model_config MODEL_CONFIG
+                        Path to model json config file
+  --lr LR               Learning rate
+  --model_name {crestereo-base,igev-mbnet,raft-base,raft-hp,raft-hp-group}
+                        model to use
+  --iters ITERS         Number of refinement iterations
+```
+- `--weight`: Path to model weights.
+- The directory of images you want to infer must have below structure. Each images must have format `{ID}_{side}.png`.
+- You can render the results directly use `--render`.
+- There are 2 formats to save results:
+  - image: Each frame & result will be saved as a png file.
+  - video: All frames & results will be saved as a video.
+- `--model_config`, `--model_name` and `--iters` are the argument that you use in your training. For inference, `--lr` is not necessasry.
+```
+.
+├── image_left
+│   ├── 0_left.png
+│   ├── 1_left.png
+│   ├── 2_left.png
+│   ├── 3_left.png
+│   └── 4_left.png
+├── image_right
+│   ├── 0_right.png
+│   ├── 1_right.png
+│   ├── 2_right.png
+│   ├── 3_right.png
+│   └── 4_right.png
+```
+- Detail commands & weights for each model are in the next section.
+
+## 4. Supported models
+- Trained weights and configuration can be found [here](https://drive.google.com/drive/folders/1hoOflbJ_75kmucyyN7eTwFT6le44oDuJ)
 <details>
   <summary><b> RAFT-Stereo</b></summary>
 
@@ -90,6 +138,10 @@ LitDisparityModule:
   ## Training command
   ```bash
   python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_name raft-hp --model_config nndepth/disparity/models/configs/HPRAFTStereo.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 1e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 150000 --HW 480 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
+  ```
+  ## Testing command
+  ```bash
+  python nndepth/disparity/scripts/inference.py  --model_name raft-hp --model_config nndepth/disparity/models/configs/HPRAFTStereo.json --iters 6 --weights PATH_TO_WEIGHT --left_path PATH_TO_LEFT_DIR --right_path PATH_TO_RIGHT_DIR --output raft-hp.mp4 --save_format video
   ```
 </details>
 
