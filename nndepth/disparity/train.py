@@ -16,6 +16,7 @@ class LitDisparityModel(pl.LightningModule):
     def __init__(self, args, **kwargs):
         super().__init__()
         alonet.common.pl_helpers.params_update(self, args, kwargs)
+        self.model_name = self.model_config.split("/")[-1].split(".")[0]
         self.args = args
         self.model = self.build_model()
         self.criterion = self.build_criterion()
@@ -25,21 +26,16 @@ class LitDisparityModel(pl.LightningModule):
         parser = parent_parser.add_argument_group("LitDisparityModule")
         parser.add_argument("--model_config", required=True, help="Path to model json config file")
         parser.add_argument("--lr", type=float, default=4e-4, help="Learning rate")
-        parser.add_argument(
-            "--model_name",
-            type=str.lower,
-            required=True,
-            choices=["crestereo-base", "igev-mbnet", "raft-base", "raft-hp", "raft-hp-group"],
-            help="model to use",
-        )
         parser.add_argument("--iters", type=int, default=12, help="Number of refinement iterations")
         return parent_parser
 
     def build_model(self):
         with open(self.model_config) as f:
             config = json.load(f)
-        model = MODELS[self.model_name](**config)
-        return model
+        for cls in MODELS:
+            if self.model_name == cls.__name__:
+                return cls(**config)
+        raise NotImplementedError(f"{self.model_name} is not supported !")
 
     def build_criterion(self):
         return DisparityCriterion()

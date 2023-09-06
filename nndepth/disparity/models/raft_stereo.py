@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict
+from typing import Dict, Union, Tuple
 
 import aloscene
 
-from nndepth.blocks.rep_vit import RepViTBlock
-from nndepth.extractors.hp_rep_vit import HPNet
+from nndepth.blocks.conv import MobileOneBlock
+from nndepth.extractors.rep_vit import RepViT
 from nndepth.extractors.basic_encoder import BasicEncoder
-from nndepth.blocks.update_block import BasicUpdateBlock, HorizontalPreservedUpdateBlock
+from nndepth.blocks.update_block import BasicUpdateBlock
 from nndepth.disparity.models.cost_volume.raft_stereo import CorrBlock1D, GroupCorrBlock1D
 
 
@@ -24,9 +24,10 @@ class RAFTStereo(nn.Module):
             corr_radius=4,
             tracing=False,
             include_preprocessing=False,
+            **kwargs
     ):
         super().__init__()
-        self.fnet = self._init_fnet()
+        self.fnet = self._init_fnet(**kwargs)
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
         self.corr_levels = corr_levels
@@ -176,35 +177,35 @@ class BaseRAFTStereo(RAFTStereo):
         return fmap1, fmap2, cnet
 
 
-class HPRAFTStereo(RAFTStereo):
-    """Preserved horizontal axis while reducing vertical dim
-    """
-    def __init__(self, **kwargs):
+class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
+    def __init__(self, num_groups: int = 4, **kwargs):
+        self.num_groups = num_groups
         super().__init__(**kwargs)
-        self.cnet_proj = RepViTBlock(256, self.context_dim * 2, exp_ratio=2.0)
+        assert self.corr_levels == 1, "Corr level must be 1 in Corse2FineGroupRepViTRaftStereo"
+        self.corr_fn = GroupCorrBlock1D
+        self.cnet_proj = nn.ModuleList([
+            MobileOneBlock(256, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
+            MobileOneBlock(64, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
+            MobileOneBlock(16, self.context_dim * 2, kernel_size=1, stride=1, padding=0)
+        ])
 
-    def _init_fnet(self):
-        return HPNet(num_blocks_per_stage=[1, 2, 8, 4], width_multipliers=[1, 1, 1, 1])
+    def _init_fnet(self, **kwargs):
+        return RepViT(**kwargs)
 
     def _init_update_block(self):
-        return HorizontalPreservedUpdateBlock(
+        return BasicUpdateBlock(
             hidden_dim=self.hidden_dim,
-            cor_planes=self.corr_levels * (self.corr_radius * 2 + 1),
+            cor_planes=self.num_groups * self.corr_levels * (self.corr_radius * 2 + 1),
             flow_channel=1,
             context_dim=self.context_dim,
-            spatial_scale=(32, 4)
+            gru="conv_gru",
+            spatial_scale=(4, 4)
         )
 
-    def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
-        B = frame1.shape[0]
-        x = self.fnet(torch.cat([frame1, frame2], axis=0))[-1]
-        fmap1, fmap2 = torch.split(x, [B, B], dim=0)
-        cnet = fmap1.clone()
-        cnet = self.cnet_proj(cnet)
-        return fmap1, fmap2, cnet
-
-    def convex_upsample(self, flow, mask, rate=(8, 8)):
+    def convex_upsample(self, flow, mask, rate: Union[Tuple[int, int], int] = (4, 4)):
         """Upsample flow field [H/N, W/M, 1] -> [H, W, 1] using convex combination"""
+        if isinstance(rate, int):
+            rate = (rate, rate)
         N, _, H, W = flow.shape
         mask = mask.view(N, 1, 9, rate[0], rate[1], H, W)
         mask = torch.softmax(mask, dim=2)
@@ -223,81 +224,41 @@ class HPRAFTStereo(RAFTStereo):
         iters=12,
         **kwargs
     ):
+        B = frame1.shape[0]
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
         # forward backbone. This method must return fmap1, fmap2, cnet
-        fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
-        fnet_ds = (frame1.shape[-2] // fmap1.shape[-2], frame1.shape[-1] // fmap1.shape[-1])
-        fmap1 = fmap1.float()
-        fmap2 = fmap2.float()
+        # fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
 
-        C = cnet1.shape[1]
-        net, inp = torch.split(cnet1, C // 2, dim=1)
-        net = torch.tanh(net)
-        inp = F.relu(inp)
+        features = self.fnet(torch.cat([frame1, frame2], axis=0))[::2]
+        features = features[::-1]
+        init_coords = self.initialize_coords(torch.split(features[0], [B, B], dim=0)[0])
+        for idx, feat in enumerate(features):
+            fmap1, fmap2 = torch.split(feat, [B, B], dim=0)
+            cnet = fmap1.clone()
+            cnet = self.cnet_proj[idx](cnet)
 
-        corr = self.corr_fn(fmap1, fmap2, self.corr_levels, self.corr_radius)
+            # fnet_ds = (frame1.shape[-2] // fmap1.shape[-2], frame1.shape[-1] // fmap1.shape[-1])
+            fmap1 = fmap1.float()
+            fmap2 = fmap2.float()
 
-        coords1 = self.initialize_coords(fmap1)
+            C = cnet.shape[1]
+            net, inp = torch.split(cnet, C // 2, dim=1)
+            net = torch.tanh(net)
+            inp = F.relu(inp)
 
-        m_outputs = []
-        for _ in range(iters):
-            coords1 = coords1.detach()
-            sampled_corr = corr(coords1)
-            net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1)
-            coords1 = coords1 + delta_disp
-            up_disp = self.convex_upsample(coords1, mask, rate=fnet_ds)
-            m_outputs.append({"up_flow": up_disp})
+            corr = self.corr_fn(fmap1, fmap2, self.corr_levels, self.corr_radius, self.num_groups)
 
-        return m_outputs
+            coords1 = init_coords.detach()
 
-
-class GroupHPRAFTStereo(HPRAFTStereo):
-    def __init__(self, num_groups: int = 4, **kwargs):
-        self.num_groups = num_groups
-        super().__init__(**kwargs)
-        self.corr_fn = GroupCorrBlock1D
-
-    def _init_update_block(self):
-        return HorizontalPreservedUpdateBlock(
-            hidden_dim=self.hidden_dim,
-            cor_planes=self.corr_levels * (self.corr_radius * 2 + 1) * self.num_groups,
-            flow_channel=1,
-            context_dim=self.context_dim,
-            spatial_scale=(32, 4)
-        )
-
-    def forward(
-        self,
-        frame1: aloscene.Frame,
-        frame2: aloscene.Frame,
-        iters=12,
-        **kwargs
-    ):
-        frame1, frame2 = self._preprocess_input(frame1, frame2)
-
-        # forward backbone. This method must return fmap1, fmap2, cnet
-        fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
-        fnet_ds = (frame1.shape[-2] // fmap1.shape[-2], frame1.shape[-1] // fmap1.shape[-1])
-        fmap1 = fmap1.float()
-        fmap2 = fmap2.float()
-
-        C = cnet1.shape[1]
-        net, inp = torch.split(cnet1, C // 2, dim=1)
-        net = torch.tanh(net)
-        inp = F.relu(inp)
-
-        corr = self.corr_fn(fmap1, fmap2, self.corr_levels, self.corr_radius, self.num_groups)
-
-        coords1 = self.initialize_coords(fmap1)
-
-        m_outputs = []
-        for _ in range(iters):
-            coords1 = coords1.detach()
-            sampled_corr = corr(coords1)
-            net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1)
-            coords1 = coords1 + delta_disp
-            up_disp = self.convex_upsample(coords1, mask, rate=fnet_ds)
-            m_outputs.append({"up_flow": up_disp})
+            m_outputs = []
+            for _ in range(iters):
+                coords1 = coords1.detach()
+                sampled_corr = corr(coords1)
+                net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1)
+                coords1 = coords1 + delta_disp
+                up_disp = self.convex_upsample(coords1, mask, rate=(4, 4))
+                m_outputs.append({"up_flow": up_disp})
+            init_coords = up_disp.detach()
 
         return m_outputs

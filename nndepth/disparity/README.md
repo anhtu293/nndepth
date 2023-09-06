@@ -94,7 +94,7 @@ LitDisparityModule:
   --model_config MODEL_CONFIG
                         Path to model json config file
   --lr LR               Learning rate
-  --model_name {crestereo-base,igev-mbnet,raft-base,raft-hp,raft-hp-group}
+  --model_name {crestereo-base,igev-mbnet,raft-base,raft-rep_vit,raft-rep_vit-group}
                         model to use
   --iters ITERS         Number of refinement iterations
 ```
@@ -137,12 +137,9 @@ LitDisparityModule:
 
   ## Training command
   ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_name raft-hp --model_config nndepth/disparity/models/configs/HPRAFTStereo.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 1e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 150000 --HW 480 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
+  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_name raft-rep_vit --model_config nndepth/disparity/models/configs/RepViTRAFTStereo.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 1e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 150000 --HW 480 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
   ```
-  ## Testing command
-  ```bash
-  python nndepth/disparity/scripts/inference.py  --model_name raft-hp --model_config nndepth/disparity/models/configs/HPRAFTStereo.json --iters 6 --weights PATH_TO_WEIGHT --left_path PATH_TO_LEFT_DIR --right_path PATH_TO_RIGHT_DIR --output raft-hp.mp4 --save_format video
-  ```
+
 </details>
 
 <details>

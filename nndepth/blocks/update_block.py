@@ -1,3 +1,4 @@
+from typing import Union, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,45 +41,30 @@ class BasicMotionEncoder(nn.Module):
 
 
 class BasicUpdateBlock(nn.Module):
-    def __init__(self, hidden_dim, cor_planes, context_dim=128, flow_channel=2, spatial_scale=8):
+    def __init__(
+        self,
+        hidden_dim: int,
+        cor_planes: int,
+        context_dim: int = 128,
+        gru: str = "sep_conv",
+        flow_channel: int = 2,
+        spatial_scale: Union[Tuple[int, int], int] = 8
+    ):
         super(BasicUpdateBlock, self).__init__()
+        GRU_CLS = {
+            "sep_conv": SepConvGRU,
+            "conv_gru": ConvGRU
+        }
 
         self.encoder = BasicMotionEncoder(cor_planes, hidden_dim=hidden_dim, flow_channel=flow_channel)
-        self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=context_dim + hidden_dim)
+        self.gru = GRU_CLS[gru](hidden_dim=hidden_dim, input_dim=context_dim + hidden_dim)
         self.flow_head = FlowHead(hidden_dim, hidden_dim=hidden_dim, flow_channel=flow_channel)
 
+        sps = spatial_scale ** 2 if isinstance(spatial_scale, int) else spatial_scale[0] * spatial_scale[1]
         self.mask = nn.Sequential(
             nn.Conv2d(hidden_dim, hidden_dim * 2, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(hidden_dim * 2, spatial_scale**2 * 9, 1, padding=0),
-        )
-
-    def forward(self, net, inp, corr, flow):
-        # print(inp.shape, corr.shape, flow.shape)
-        motion_features = self.encoder(flow, corr)
-        # print(motion_features.shape, inp.shape)
-        inp = torch.cat((inp, motion_features), dim=1)
-
-        net = self.gru(net, inp)
-        delta_flow = self.flow_head(net)
-
-        # scale mask to balence gradients
-        mask = 0.25 * self.mask(net)
-        return net, mask, delta_flow
-
-
-class HorizontalPreservedUpdateBlock(nn.Module):
-    def __init__(self, hidden_dim, cor_planes, context_dim=128, flow_channel=1, spatial_scale=(8, 8)):
-        super(HorizontalPreservedUpdateBlock, self).__init__()
-
-        self.encoder = BasicMotionEncoder(cor_planes, hidden_dim, flow_channel)
-        self.gru = ConvGRU(hidden_dim=hidden_dim, input_dim=context_dim + hidden_dim)
-        self.flow_head = FlowHead(hidden_dim, hidden_dim=hidden_dim, flow_channel=flow_channel)
-
-        self.mask = nn.Sequential(
-            nn.Conv2d(hidden_dim, hidden_dim * 2, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(hidden_dim * 2, spatial_scale[0] * spatial_scale[1] * 9, 1, padding=0),
+            nn.Conv2d(hidden_dim * 2, sps * 9, 1, padding=0),
         )
 
     def forward(self, net, inp, corr, flow):

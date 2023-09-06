@@ -1,10 +1,11 @@
-from nndepth.disparity.models import CREStereo, IGEVStereoMBNet, BaseRAFTStereo, HPRAFTStereo, GroupHPRAFTStereo
+from nndepth.disparity.models import (
+    CREStereo, IGEVStereoMBNet, BaseRAFTStereo, Corse2FineGroupRepViTRAFTStereo
+)
 
 
-MODELS = {
-    "crestereo-base": CREStereo,
-    "igev-mbnet": IGEVStereoMBNet,
-    "raft-base": BaseRAFTStereo,
-    "raft-hp": HPRAFTStereo,
-    "raft-hp-group": GroupHPRAFTStereo,
-}
+MODELS = [
+    CREStereo,
+    IGEVStereoMBNet,
+    BaseRAFTStereo,
+    Corse2FineGroupRepViTRAFTStereo,
+]
