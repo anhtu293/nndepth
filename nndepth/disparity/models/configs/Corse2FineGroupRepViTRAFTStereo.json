@@ -1,0 +1,17 @@
+{
+    "hidden_dim": 64,
+    "context_dim": 64,
+    "corr_levels": 1,
+    "corr_radius": 4,
+    "num_groups": 4,
+    "patch_size": 7,
+    "stem_strides": [[2, 2], [2, 2], [1, 1]],
+    "num_blocks_per_stage": [4, 4, 6, 2],
+    "width_multipliers": [1, 1, 1, 1],
+    "use_ffn_per_stage": [false, true, true, true],
+    "ffn_exp_ratios": [1.0, 3.0, 3.0, 4.0],
+    "downsample_ratios": [[2, 2], [2, 2], [2, 2], [2, 2]],
+    "token_mixer_types": ["repmixer", "repmixer", "repmixer", "attention"],
+    "tracing": false,
+    "include_preprocessing": false
+}

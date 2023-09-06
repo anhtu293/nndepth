@@ -18,7 +18,7 @@ def main():
     if args.expe_name is None:
         expe_name = "disparity_on_tartanair"
     else:
-        expe_name = f"disparity-{args.model_name}-{args.expe_name}"
+        expe_name = f"disparity-{lit.model_name}-{args.expe_name}"
     lit.run_train(tartan_loader, args, project="disparity", expe_name=expe_name)
 
 

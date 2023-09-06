@@ -69,8 +69,6 @@ LitDisparityModule:
   --model_config MODEL_CONFIG
                         Path to model json config file
   --lr LR               Learning rate
-  --model_name {crestereo-base,igev-mbnet}
-                        model to use
   --iters ITERS         Number of refinement iterations
 ```
 - Details of models and how to run the training with those models are below.
@@ -94,8 +92,6 @@ LitDisparityModule:
   --model_config MODEL_CONFIG
                         Path to model json config file
   --lr LR               Learning rate
-  --model_name {crestereo-base,igev-mbnet,raft-base,raft-hp,raft-hp-group}
-                        model to use
   --iters ITERS         Number of refinement iterations
 ```
 - `--weight`: Path to model weights.
@@ -137,12 +133,9 @@ LitDisparityModule:
 
   ## Training command
   ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_name raft-hp --model_config nndepth/disparity/models/configs/HPRAFTStereo.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 1e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 150000 --HW 480 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
+  python nndepth/disparity/scripts/train_disparity_on_tartanair.py  --model_config nndepth/disparity/models/configs/Corse2FineGroupRepViTRAFTStereo.json --iters 2 --batch_size 4 --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 250000 --HW 448 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
   ```
-  ## Testing command
-  ```bash
-  python nndepth/disparity/scripts/inference.py  --model_name raft-hp --model_config nndepth/disparity/models/configs/HPRAFTStereo.json --iters 6 --weights PATH_TO_WEIGHT --left_path PATH_TO_LEFT_DIR --right_path PATH_TO_RIGHT_DIR --output raft-hp.mp4 --save_format video
-  ```
+
 </details>
 
 <details>
@@ -158,7 +151,7 @@ LitDisparityModule:
 
   ## Training command
   ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_name igev-mbnet --model_config nndepth/disparity/models/configs/CREStereo.json --iters 4 --batch_size 4 --accumulate_grad_batches 2 --lr 5e-5 --limit_val_batches 200 --max_step 150000 --HW 384 480 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save
+  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/models/configs/CREStereo.json --iters 4 --batch_size 4 --accumulate_grad_batches 2 --lr 5e-5 --limit_val_batches 200 --max_step 150000 --HW 384 480 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save
   ```
 </details>
 
@@ -175,6 +168,6 @@ LitDisparityModule:
 
   ## Training command
   ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_name igev-mbnet --model_config nndepth/disparity/models/configs/IGEVStereoMBNet.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 5e-5 --limit_val_batches 200 --max_step 150000 --HW 384 480 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save
+  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/models/configs/IGEVStereoMBNet.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 5e-5 --limit_val_batches 200 --max_step 150000 --HW 384 480 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save
   ```
 </details>
