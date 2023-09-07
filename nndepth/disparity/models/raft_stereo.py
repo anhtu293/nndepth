@@ -5,7 +5,7 @@ from typing import Dict, Union, Tuple
 
 import aloscene
 
-from nndepth.blocks.conv import MobileOneBlock
+from nndepth.blocks.conv import MobileOneBlock, FeatureFusionBlock
 from nndepth.extractors.rep_vit import RepViT
 from nndepth.extractors.basic_encoder import BasicEncoder
 from nndepth.blocks.update_block import BasicUpdateBlock
@@ -143,14 +143,16 @@ class RAFTStereo(nn.Module):
         corr = self.corr_fn(fmap1, fmap2, self.corr_levels, self.corr_radius)
 
         coords1 = self.initialize_coords(fmap1)
+        org_coords = self.initialize_coords(fmap1)
 
         m_outputs = []
         for _ in range(iters):
             coords1 = coords1.detach()
             sampled_corr = corr(coords1)
-            net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1)
+            net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1 - org_coords)
             coords1 = coords1 + delta_disp
-            up_disp = self.convex_upsample(coords1, mask, rate=fnet_ds)
+            disp = coords1 - org_coords
+            up_disp = self.convex_upsample(disp, mask, rate=fnet_ds)
             m_outputs.append({"up_flow": up_disp})
 
         return m_outputs
@@ -186,7 +188,11 @@ class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
         self.cnet_proj = nn.ModuleList([
             MobileOneBlock(256, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
             MobileOneBlock(64, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
-            MobileOneBlock(16, self.context_dim * 2, kernel_size=1, stride=1, padding=0)
+            MobileOneBlock(64, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
+        ])
+        self.fusion_blocks = nn.ModuleList([
+            FeatureFusionBlock(256, 64, 64, 1, 0),
+            FeatureFusionBlock(64, 16, 64, 1, 0),
         ])
 
     def _init_fnet(self, **kwargs):
@@ -227,19 +233,19 @@ class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
         B = frame1.shape[0]
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
-        # forward backbone. This method must return fmap1, fmap2, cnet
-        # fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
-
         features = self.fnet(torch.cat([frame1, frame2], axis=0))[::2]
         features = features[::-1]
         init_coords = self.initialize_coords(torch.split(features[0], [B, B], dim=0)[0])
         org_coords = self.initialize_coords(torch.split(features[0], [B, B], dim=0)[0])
+
+        previous_feat = None
         for idx, feat in enumerate(features):
+            if previous_feat is not None:
+                feat = self.fusion_blocks[idx - 1]([previous_feat, feat])
             fmap1, fmap2 = torch.split(feat, [B, B], dim=0)
             cnet = fmap1.clone()
             cnet = self.cnet_proj[idx](cnet)
 
-            # fnet_ds = (frame1.shape[-2] // fmap1.shape[-2], frame1.shape[-1] // fmap1.shape[-1])
             fmap1 = fmap1.float()
             fmap2 = fmap2.float()
 
@@ -264,5 +270,6 @@ class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
             if idx < len(features) - 1:
                 org_coords = org_coords = self.initialize_coords(torch.split(features[idx + 1], [B, B], dim=0)[0])
                 init_coords = org_coords + up_disp.detach()
+                previous_feat = feat
 
         return m_outputs

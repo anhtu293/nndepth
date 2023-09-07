@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 
 
 class SEBlock(nn.Module):
@@ -539,3 +539,29 @@ class RepLargeKernelConv(nn.Module):
         )
         mod_list.add_module("bn", nn.BatchNorm2d(num_features=self.out_channels))
         return mod_list
+
+
+class FeatureFusionBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels_1: int,
+        in_channels_2: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        padding: int = 3
+    ):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels_1, in_channels_1, kernel_size=kernel_size, padding=padding)
+        self.conv2 = nn.Conv2d(in_channels_2, in_channels_2, kernel_size=kernel_size, padding=padding)
+        self.conv3 = nn.Conv2d(in_channels_1 + in_channels_2, out_channels, kernel_size=kernel_size, padding=padding)
+        self.act = nn.ReLU()
+
+    def forward(self, feats: List[torch.Tensor]):
+        feat_1 = self.conv1(
+            nn.functional.interpolate(
+                feats[0], size=feats[1].shape[-2:], mode="bilinear", align_corners=False
+            )
+        )
+        feat_2 = self.conv2(feats[1])
+        feat = torch.cat([feat_1, feat_2], axis=1)
+        return self.act(self.conv3(feat))
