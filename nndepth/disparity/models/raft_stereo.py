@@ -239,6 +239,7 @@ class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
         org_coords = self.initialize_coords(torch.split(features[0], [B, B], dim=0)[0])
 
         previous_feat = None
+        m_outputs = []
         for idx, feat in enumerate(features):
             if previous_feat is not None:
                 feat = self.fusion_blocks[idx - 1]([previous_feat, feat])
@@ -258,7 +259,6 @@ class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
 
             coords1 = init_coords.detach()
 
-            m_outputs = []
             for _ in range(iters):
                 coords1 = coords1.detach()
                 sampled_corr = corr(coords1)
@@ -266,9 +266,15 @@ class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
                 coords1 = coords1 + delta_disp
                 disp = coords1 - org_coords
                 up_disp = self.convex_upsample(disp, mask, rate=(4, 4))
-                m_outputs.append({"up_flow": up_disp})
+
+                rate = frame1.shape[-1] / up_disp.shape[-1]
+                if rate == 1:
+                    disp_at_org_size = up_disp
+                else:
+                    disp_at_org_size = nn.functional.interpolate(up_disp, size=frame1.shape[-2:]) * rate
+                m_outputs.append({"up_flow": disp_at_org_size})
             if idx < len(features) - 1:
-                org_coords = org_coords = self.initialize_coords(torch.split(features[idx + 1], [B, B], dim=0)[0])
+                org_coords = self.initialize_coords(torch.split(features[idx + 1], [B, B], dim=0)[0])
                 init_coords = org_coords + up_disp.detach()
                 previous_feat = feat
 
