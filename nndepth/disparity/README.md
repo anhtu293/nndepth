@@ -133,7 +133,7 @@ LitDisparityModule:
 
   ## Training command
   ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py  --model_config nndepth/disparity/models/configs/Corse2FineGroupRepViTRAFTStereo.json --iters 2 --batch_size 4 --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 250000 --HW 448 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
+  python nndepth/disparity/scripts/train_disparity_on_tartanair.py  --model_config nndepth/disparity/models/configs/Coarse2FineGroupRepViTRAFTStereo.json --iters 2 --batch_size 4 --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 250000 --HW 448 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
   ```
 
 </details>

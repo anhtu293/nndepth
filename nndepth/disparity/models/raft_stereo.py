@@ -179,11 +179,11 @@ class BaseRAFTStereo(RAFTStereo):
         return fmap1, fmap2, cnet
 
 
-class Corse2FineGroupRepViTRAFTStereo(RAFTStereo):
+class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
     def __init__(self, num_groups: int = 4, **kwargs):
         self.num_groups = num_groups
         super().__init__(**kwargs)
-        assert self.corr_levels == 1, "Corr level must be 1 in Corse2FineGroupRepViTRaftStereo"
+        assert self.corr_levels == 1, "Corr level must be 1 in Coarse2FineGroupRepViTRaftStereo"
         self.corr_fn = GroupCorrBlock1D
         self.cnet_proj = nn.ModuleList([
             MobileOneBlock(256, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
