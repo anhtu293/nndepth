@@ -14,12 +14,19 @@ def elu_feature_map(x):
 
 
 class LinearAttention(Module):
-    def __init__(self, eps=1e-6):
+    def __init__(self, eps: float = 1e-6):
         super().__init__()
         self.feature_map = elu_feature_map
         self.eps = eps
 
-    def forward(self, queries, keys, values, q_mask=None, kv_mask=None):
+    def forward(
+        self,
+        queries: torch.Tensor,
+        keys: torch.Tensor,
+        values: torch.Tensor,
+        q_mask: torch.Tensor = None,
+        kv_mask: torch.Tensor = None,
+    ):
         """Multi-Head linear attention proposed in "Transformers are RNNs"
         Args:
             queries: [N, L, H, D]
@@ -50,12 +57,19 @@ class LinearAttention(Module):
 
 
 class FullAttention(Module):
-    def __init__(self, use_dropout=False, attention_dropout=0.1):
+    def __init__(self, use_dropout: bool = False, attention_dropout: float = 0.1):
         super().__init__()
         self.use_dropout = use_dropout
         self.dropout = Dropout(attention_dropout)
 
-    def forward(self, queries, keys, values, q_mask=None, kv_mask=None):
+    def forward(
+        self,
+        queries: torch.Tensor,
+        keys: torch.Tensor,
+        values: torch.Tensor,
+        q_mask: torch.Tensor = None,
+        kv_mask: torch.Tensor = None,
+    ) -> torch.Tensor:
         """Multi-head scaled dot-product attention, a.k.a full attention.
         Args:
             queries: [N, L, H, D]
@@ -129,7 +143,7 @@ class LinearSelfAttention(nn.Module):
         # self.act2 = nn.GELU()
         self.embed_dim = dim
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # [B, C, P, N] --> [B, h + 2d, P, N]
         qkv = self.qkv_proj(x)
 

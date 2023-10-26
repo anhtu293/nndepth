@@ -3,7 +3,13 @@ import torch.nn as nn
 
 
 class SepConvGRU(nn.Module):
-    def __init__(self, hidden_dim=128, input_dim=192 + 128):
+    def __init__(self, hidden_dim: int = 128, input_dim: int = 192 + 128):
+        """Initialize the SepConvGRU module.
+
+        Args:
+            hidden_dim (int): The hidden dimension of the GRU. Default is 128.
+            input_dim (int): The input dimension of the GRU. Default is 192 + 128.
+        """
         super(SepConvGRU, self).__init__()
         self.convz1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (1, 5), padding=(0, 2))
         self.convr1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (1, 5), padding=(0, 2))
@@ -13,7 +19,7 @@ class SepConvGRU(nn.Module):
         self.convr2 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (5, 1), padding=(2, 0))
         self.convq2 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, (5, 1), padding=(2, 0))
 
-    def forward(self, h, x):
+    def forward(self, h: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         # horizontal
         hx = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz1(hx))
@@ -32,13 +38,19 @@ class SepConvGRU(nn.Module):
 
 
 class ConvGRU(nn.Module):
-    def __init__(self, hidden_dim=128, input_dim=192 + 128):
+    def __init__(self, hidden_dim: int = 128, input_dim: int = 192 + 128):
+        """Initialize the ConvGRU module.
+
+        Args:
+            hidden_dim (int): The hidden dimension of the GRU. Default is 128.
+            input_dim (int): The input dimension of the GRU. Default is 192 + 128.
+        """
         super(ConvGRU, self).__init__()
         self.convz1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, 3, 1, 1)
         self.convr1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, 3, 1, 1)
         self.convq1 = nn.Conv2d(hidden_dim + input_dim, hidden_dim, 3, 1, 1)
 
-    def forward(self, h, x):
+    def forward(self, h: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         # horizontal
         hx = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz1(hx))

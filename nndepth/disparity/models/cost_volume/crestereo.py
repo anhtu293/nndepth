@@ -1,5 +1,5 @@
 import torch
-
+from typing import List, Tuple
 from nndepth.disparity.utils import bilinear_sampler, coords_grid, manual_pad
 
 
@@ -8,7 +8,7 @@ class AGCL:
     Implementation of Adaptive Group Correlation Layer (AGCL).
     """
 
-    def __init__(self, fmap1, fmap2, att=None):
+    def __init__(self, fmap1: torch.Tensor, fmap2: torch.Tensor, att=None):
         self.fmap1 = fmap1
         self.fmap2 = fmap2
 
@@ -16,14 +16,22 @@ class AGCL:
 
         self.coords = coords_grid(fmap1.shape[0], fmap1.shape[2], fmap1.shape[3], fmap1.device)
 
-    def __call__(self, flow, extra_offset, small_patch=False, iter_mode=False):
+    def __call__(
+        self, flow: torch.Tensor, extra_offset: torch.Tensor, small_patch=False, iter_mode=False
+    ) -> torch.Tensor:
         if iter_mode:
             corr = self.corr_iter(self.fmap1, self.fmap2, flow, small_patch)
         else:
             corr = self.corr_att_offset(self.fmap1, self.fmap2, flow, extra_offset, small_patch)
         return corr
 
-    def get_correlation(self, left_feature, right_feature, psize=(3, 3), dilate=(1, 1)):
+    def get_correlation(
+        self,
+        left_feature: torch.Tensor,
+        right_feature: torch.Tensor,
+        psize: Tuple[int, int] = (3, 3),
+        dilate: Tuple[int, int] = (1, 1),
+    ) -> torch.Tensor:
         N, C, H, W = left_feature.shape
 
         di_y, di_x = dilate[0], dilate[1]
@@ -43,7 +51,9 @@ class AGCL:
 
         return corr_final
 
-    def corr_iter(self, left_feature, right_feature, flow, small_patch):
+    def corr_iter(
+        self, left_feature: torch.Tensor, right_feature: torch.Tensor, flow: torch.Tensor, small_patch: bool
+    ) -> torch.Tensor:
         coords = self.coords + flow
         coords = coords.permute(0, 2, 3, 1)
         right_feature = bilinear_sampler(right_feature, coords)
@@ -68,7 +78,14 @@ class AGCL:
 
         return final_corr
 
-    def corr_att_offset(self, left_feature, right_feature, flow, extra_offset, small_patch):
+    def corr_att_offset(
+        self,
+        left_feature: torch.Tensor,
+        right_feature: torch.Tensor,
+        flow: torch.Tensor,
+        extra_offset: torch.Tensor,
+        small_patch: bool,
+    ) -> torch.Tensor:
         N, C, H, W = left_feature.shape
 
         if self.att is not None:

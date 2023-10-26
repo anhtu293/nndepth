@@ -501,6 +501,32 @@ class RepViT(nn.Module):
         inference_mode: bool = False,
         **kwargs,
     ):
+        """
+        Initialize the RepViT model.
+
+        Args:
+            in_channels (int): Number of input channels. Default: 3.
+            patch_size (int): Size of the patch. Default: 7.
+            stem_strides (List[int] or List[(int, int)]): Strides for the stem layers.
+                Default: [(2, 2), (2, 2), (1, 1)]
+            num_blocks_per_stage (List[int]): Number of blocks per stage. Default: [4, 4, 6, 2].
+            width_multipliers (List[int]): Width multipliers for each stage. Default: [1, 1, 1, 1].
+            use_ffn_per_stage (List[bool]): Flag to use feed-forward network per stage.
+                Default: [False, True, True, True].
+            ffn_exp_ratios (List[float]): Expansion ratios for the feed-forward network.
+                Default: [1.0, 3.0, 3.0, 4.0].
+            downsample_ratios (List[Tuple[int, int]] or List[List[int]]): Downsample ratios for each stage.
+                Default: [(2, 2), (2, 2), (2, 2), (2, 2)].
+            token_mixer_types (List[str]): Token mixer types for each stage.
+                Default: ["repmixer", "repmixer", "repmixer", "attention"].
+            drop_rate (float): Dropout rate. Default: 0.0.
+            drop_path_rate (float): Drop path rate. Default: 0.0.
+            use_layer_scale (bool): Flag to use layer scale. Default: True.
+            layer_scale_init_value (float): Initial value for layer scale. Default: 1e-5.
+            act_layer (torch.nn.Module): Activation layer. Default: nn.GELU.
+            inference_mode (bool): Flag to instantiate model in inference mode with reparameterization. Default: False.
+            **kwargs: Additional keyword arguments.
+        """
         super().__init__()
         assert len(num_blocks_per_stage) == len(width_multipliers)
         self.num_blocks_per_stage = num_blocks_per_stage
@@ -701,7 +727,7 @@ class RepViT(nn.Module):
             if hasattr(module, "reparameterize"):
                 module.reparameterize()
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
         features = []
 
         for layer in [self.stem, self.stage_0, self.stage_1, self.stage_2, self.stage_3]:

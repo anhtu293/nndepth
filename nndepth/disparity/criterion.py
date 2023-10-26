@@ -1,5 +1,6 @@
 from torch import nn
 import torch
+from typing import List, Dict
 
 import aloscene
 
@@ -9,7 +10,13 @@ class DisparityCriterion(nn.Module):
         super().__init__()
 
     @staticmethod
-    def sequence_loss(m_outputs, flow_gt, gamma=0.8, max_flow=1000, compute_per_iter=False):
+    def sequence_loss(
+        m_outputs: List[Dict[str, torch.Tensor]],
+        flow_gt: torch.Tensor,
+        gamma: float = 0.8,
+        max_flow: int = 1000,
+        compute_per_iter: bool = False,
+    ):
         """Loss function defined over sequence of flow predictions"""
         n_predictions = len(m_outputs)
         flow_loss = 0.0
@@ -44,7 +51,9 @@ class DisparityCriterion(nn.Module):
         }
         return flow_loss, metrics, epe_per_iter
 
-    def forward(self, m_outputs, frame1, compute_per_iter=False):
+    def forward(
+        self, m_outputs: List[Dict[str, torch.Tensor]], frame1: aloscene.Frame, compute_per_iter: bool = False
+    ):
         assert isinstance(frame1, aloscene.Frame)
         disp_gt = frame1.disparity
         disp_mask = frame1.disparity.mask
@@ -53,7 +62,5 @@ class DisparityCriterion(nn.Module):
 
         disp_gt = disp_gt.as_tensor()
         disp_mask = disp_mask.as_tensor() if disp_mask is not None else None
-        flow_loss, metrics, epe_per_iter = self.sequence_loss(
-            m_outputs, disp_gt, compute_per_iter=compute_per_iter
-        )
+        flow_loss, metrics, epe_per_iter = self.sequence_loss(m_outputs, disp_gt, compute_per_iter=compute_per_iter)
         return flow_loss, metrics, epe_per_iter

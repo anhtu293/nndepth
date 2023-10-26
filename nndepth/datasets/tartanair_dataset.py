@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import os
+from typing import List, Union, Callable
 
 from alodataset import BaseDataset, SequenceMixin
 import aloscene
@@ -45,13 +46,13 @@ class TartanairDataset(BaseDataset, SequenceMixin):
 
     def __init__(
         self,
-        envs=None,
-        sequences=None,
-        cameras=None,
-        labels=None,
-        start_from=0,
-        pose_format="NED",
-        get_cameras_fn=None,
+        envs: List[str] = None,
+        sequences: List[str] = None,
+        cameras: List[str] = None,
+        labels: List[str] = None,
+        start_from: int = 0,
+        pose_format: str = "NED",
+        get_cameras_fn: Callable = None,
         **kwargs,
     ):
         super().__init__(name="TartanAir", **kwargs)
@@ -84,9 +85,7 @@ class TartanairDataset(BaseDataset, SequenceMixin):
 
             # Count the number of element in the sequence
             sequence_size = len([el for el in os.listdir(os.path.join(data_dir, "image_left")) if ".png" in el])
-            temporal_sequences = sequence_indices(
-                sequence_size, self.sequence_size, self.sequence_skip
-            )
+            temporal_sequences = sequence_indices(sequence_size, self.sequence_size, self.sequence_skip)
 
             self.items.update(
                 {

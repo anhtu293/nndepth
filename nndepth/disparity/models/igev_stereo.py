@@ -13,21 +13,32 @@ from nndepth.disparity.models.cost_volume.igev import GeometryAwareCostVolume, C
 class IGEVStereoBase(nn.Module):
     """IGEV Stereo: https://arxiv.org/pdf/2303.06615.pdf"""
 
-    SUPPORTED_UPDATE_CLS = {
-        "basic_update_block": BasicUpdateBlock
-    }
+    SUPPORTED_UPDATE_CLS = {"basic_update_block": BasicUpdateBlock}
 
     def __init__(
-            self,
-            update_cls="basic_update_block",
-            cv_groups=8,
-            hidden_dim=128,
-            context_dim=128,
-            corr_levels=4,
-            corr_radius=4,
-            tracing=False,
-            include_preprocessing=False,
+        self,
+        update_cls: str = "basic_update_block",
+        cv_groups: int = 8,
+        hidden_dim: int = 128,
+        context_dim: int = 128,
+        corr_levels: int = 4,
+        corr_radius: int = 4,
+        tracing: bool = False,
+        include_preprocessing: bool = False,
     ):
+        """
+        Initialize the IGEVStereoBase model.
+
+        Args:
+            update_cls (str): The class name of the update block to use. Default is "basic_update_block".
+            cv_groups (int): The number of groups to split the cost volume into. Default is 8.
+            hidden_dim (int): The hidden dimension of the update block. Default is 128.
+            context_dim (int): The context dimension of the update block. Default is 128.
+            corr_levels (int): The number of correlation levels to compute. Default is 4.
+            corr_radius (int): The radius of the correlation window. Default is 4.
+            tracing (bool): Whether to enable tracing for ONNX exportation. Default is False.
+            include_preprocessing (bool): Whether to include preprocessing steps in tracing. Default is False.
+        """
         super(IGEVStereoBase, self).__init__()
         self.fnet = self._init_fnet()
         self.hidden_dim = hidden_dim
@@ -130,17 +141,10 @@ class IGEVStereoBase(nn.Module):
         return up_flow.reshape(N, 1, rate * H, rate * W)
 
     def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
-        """Forward in backbone. This method must return fmap1, fmap2, cnet1 and guide_features
-        """
+        """Forward in backbone. This method must return fmap1, fmap2, cnet1 and guide_features"""
         raise NotImplementedError("Must be implemented in child class")
 
-    def forward(
-        self,
-        frame1: aloscene.Frame,
-        frame2: aloscene.Frame,
-        iters=12,
-        **kwargs
-    ):
+    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, iters=12, **kwargs):
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
         # forward backbone. This method must return fmap1, fmap2, cnet and guide_features(needed to guide cost volume)
@@ -179,8 +183,8 @@ class IGEVStereoBase(nn.Module):
 
 
 class IGEVStereoMBNet(IGEVStereoBase):
-    """IGEV Stereo with MobileNetV3 Large as backbone
-    """
+    """IGEV Stereo with MobileNetV3 Large as backbone"""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.fnet_proj = nn.Sequential(

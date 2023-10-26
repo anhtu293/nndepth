@@ -8,15 +8,27 @@ from nndepth.disparity.utils import linear_sampler
 
 class GeometryAwareCostVolume(nn.Module):
     def __init__(
-            self,
-            fmap1: torch.Tensor,
-            fmap2: torch.Tensor,
-            features: List[torch.Tensor],
-            regularizer_3d: nn.Module,
-            num_levels: int = 4,
-            radius: int = 4,
-            num_groups: int = 8
+        self,
+        fmap1: torch.Tensor,
+        fmap2: torch.Tensor,
+        features: List[torch.Tensor],
+        regularizer_3d: nn.Module,
+        num_levels: int = 4,
+        radius: int = 4,
+        num_groups: int = 8,
     ):
+        """
+        Initializes the GeometryAwareCostVolume module.
+
+        Args:
+            fmap1 (torch.Tensor): The feature map from the first image. Shape: (B, C, H, W).
+            fmap2 (torch.Tensor): The feature map from the second image. Shape: (B, C, H, W).
+            features (List[torch.Tensor]): List of additional feature maps. Each feature map has shape (B, C, H, W).
+            regularizer_3d (nn.Module): The 3D regularizer module.
+            num_levels (int): The number of levels in the cost volume pyramid. Default: 4.
+            radius (int): The radius of the correlation window. Default: 4.
+            num_groups (int): The number of groups in the cost volume. Default: 8.
+        """
         super().__init__()
         self.num_groups = num_groups
         self.num_levels = num_levels
@@ -48,7 +60,7 @@ class GeometryAwareCostVolume(nn.Module):
             dx = torch.linspace(-r, r, 2 * r + 1)
             coords1 = coords.permute((0, 2, 3, 1)).unsqueeze(1)
             coords1 = coords1.repeat((1, self.num_groups, 1, 1, 1))
-            center = coords1.reshape(batch * self.num_groups * h * w, 1) / 2 ** i
+            center = coords1.reshape(batch * self.num_groups * h * w, 1) / 2**i
             dx = dx.reshape(1, 2 * r + 1).to(coords1.device)
             coords_lvl = center + dx
             feat_corr = feat_corr.reshape(batch * self.num_groups * h * w, -1)
@@ -67,8 +79,9 @@ class GeometryAwareCostVolume(nn.Module):
         return out_corr.permute(0, 3, 1, 2).contiguous().float()
 
     def build_cost_volume(self, fmap1: torch.Tensor, fmap2: torch.Tensor):
-        assert fmap1.shape[1] % self.num_groups == 0 and fmap2.shape[1] % self.num_groups == 0,\
-            "Number of channels of fmap1 and fmap2 must be the factor of num_groups"
+        assert (
+            fmap1.shape[1] % self.num_groups == 0 and fmap2.shape[1] % self.num_groups == 0
+        ), "Number of channels of fmap1 and fmap2 must be the factor of num_groups"
         group_fmap1 = torch.split(fmap1, self.num_groups, dim=1)
         group_fmap2 = torch.split(fmap2, self.num_groups, dim=1)
 
@@ -79,7 +92,7 @@ class GeometryAwareCostVolume(nn.Module):
             num_channels = feat1.shape[1]
             feat1 = torch.permute(feat1, (0, 2, 3, 1))
             feat2 = torch.permute(feat2, (0, 2, 1, 3))
-            cost_volumes.append(torch.matmul(feat1, feat2) / num_channels ** 0.5)
+            cost_volumes.append(torch.matmul(feat1, feat2) / num_channels**0.5)
         cost_volumes = torch.stack(cost_volumes, dim=1)
 
         return cost_volumes
@@ -134,6 +147,13 @@ class FeatureGuidedBlock(nn.Module):
 
 class CostVolumeFilterNetwork(nn.Module):
     def __init__(self, in_channels: int, feat_channels: List[int]):
+        """
+        Initializes the CostVolumeFilterNetwork module.
+
+        Args:
+            in_channels (int): The number of input channels.
+            feat_channels (List[int]): A list of integers representing the number of feature channels at each level.
+        """
         super(CostVolumeFilterNetwork, self).__init__()
 
         self.conv1 = nn.Sequential(
@@ -165,7 +185,7 @@ class CostVolumeFilterNetwork(nn.Module):
         self.conv1_up = Upsampler3D(in_channels * 2, in_channels, kernel_size=3, stride=1, padding=1)
         self.final_conv = ConvBn3D(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x: torch.Tensor, features: List[torch.Tensor]):
+    def forward(self, x: torch.Tensor, features: List[torch.Tensor]) -> torch.Tensor:
         corr1 = self.conv1(x)
         corr1 = self.conv1_feat_guided(corr1, features[0])
 
