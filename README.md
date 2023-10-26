@@ -3,26 +3,26 @@ Depth Estimation by Neural Network
 
 
 # 1. Introduction
-- Depth estimation by neural network is now a very active domain thanks to its application in various domains: robotic, VR/AR, autonomous car, ... The implementation of many algorithms is very diversed and sometime incomplete. The deployment (model exportation, execution script, ...) isn't always supported. Therefore, I implement this repository to unify many depth estimation neural network in a repository to simplify the training - inference - deployment.
-- I mainly focus on Depth Estimation from Monocular and Stereo Camera, particularly lightweight algorithms which can be deployed and run in realtime on edge device: mobile phone, robots, AI Cameras.
+- Depth estimation by neural network is now a very active domain thanks to its application in various domains: robotic, VR/AR, autonomous car, ... The implementation of many algorithms is very diverse and sometimes incomplete. The deployment (model exportation, execution script, ...) isn't always supported. Therefore, I implemented this repository to unify many depth estimation neural networks in a single repository to simplify the training - inference - deployment process.
+- I mainly focus on Depth Estimation from Monocular and Stereo Cameras, particularly lightweight algorithms that can be deployed and run in real-time on edge devices such as mobile phones, robots, and AI Cameras.
 
 # 2. Dependencies
-- This repository is developed using [`aloception-oss`](https://github.com/Visual-Behavior/aloception-oss), an open source package of VisualBehavior which allows to handle easily the pipeline (data processing, training cycle, exportation, ...) in many Computer Vision application. You can take a look at `aloception-oss` to understand its basic concepts.
-- The easiest way to install working environment is to use Docker.
-- Build docker image
+- This repository is developed using [`aloception-oss`](https://github.com/Visual-Behavior/aloception-oss), an open-source package of VisualBehavior that allows for easy handling of the pipeline (data processing, training cycle, exportation, etc.) in many Computer Vision applications. You can take a look at `aloception-oss` to understand its basic concepts.
+- The easiest way to install the working environment is to use Docker.
+- Build the Docker image
 ```
 docker build -t nndepth .
 ```
-- Launch docker container
+- Launch the Docker container
 ```
 docker run  --gpus all --ipc host -e LOCAL_USER_ID=$(id -u)  -it --rm  -v MOUNT_YOUR_DISK  --privileged -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix IMAGE_ID
 ```
 
 # 3. Modules
-- The project is organized in different modules:
+- The project is organized into different modules:
     - **blocks**: basic neural network blocks. Some blocks can be found: attention block, positional encoding, residual blocks, transformer, update block for RAFT-based models.
     - **datasets**: Data loader classes.
-    - **disparity**: Module to train - inference different neural networks for Stereo depth estimation.
+    - **disparity**: Module to train and infer different neural networks for Stereo depth estimation.
     - **extractors**: Backbones.
 
 
@@ -32,6 +32,12 @@ docker run  --gpus all --ipc host -e LOCAL_USER_ID=$(id -u)  -it --rm  -v MOUNT_
 - [x] [IGEV-Stereo](https://arxiv.org/pdf/2303.06615.pdf)
 - [x] Data processing script
 - [x] Inference script for Stereo module
+- [ ] Integrate more datasets: Sceneflow, KITTI, [SANPO](https://blog.research.google/2023/10/sanpo-scene-understanding-accessibility.html), etc
+- [ ] Implement evaluation script with some common metrics
+- [ ] [GM-Stereo: Unifying Flow, Stereo and Depth Estimation](https://arxiv.org/pdf/2211.05783.pdf)
+- [ ] [LEAStereo: Hierarchical Neural Architecture Search for Deep Stereo Matching](https://proceedings.neurips.cc/paper/2020/file/fc146be0b230d7e0a92e66a6114b840d-Paper.pdf)
+- [ ] Lightweight CREStereo
+- [ ] More lightweight feature extractor with pretrained weights
 - [ ] [High-frequency Stereo Matching Network](https://openaccess.thecvf.com/content/CVPR2023/papers/Zhao_High-Frequency_Stereo_Matching_Network_CVPR_2023_paper.pdf)
 - [ ] [MobileStereoNet](https://arxiv.org/pdf/2108.09770.pdf)
 - [ ] [SCV-STEREO](https://arxiv.org/pdf/2107.08187.pdf)
