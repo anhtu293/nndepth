@@ -6,7 +6,15 @@ from nndepth.blocks.attn_block import LinearAttention, FullAttention
 
 
 class LoFTREncoderLayer(nn.Module):
-    def __init__(self, d_model, nhead, attention="linear"):
+    def __init__(self, d_model: int, nhead: int, attention: str = "linear"):
+        """
+        Initialize a LoFTREncoderLayer.
+
+        Args:
+            d_model (int): The number of expected features in the input.
+            nhead (int): The number of heads in the multiheadattention models.
+            attention (str): The type of attention mechanism to use. Options are "linear" or "full".
+        """
         super(LoFTREncoderLayer, self).__init__()
 
         self.dim = d_model // nhead
@@ -30,7 +38,9 @@ class LoFTREncoderLayer(nn.Module):
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
 
-    def forward(self, x, source, x_mask=None, source_mask=None):
+    def forward(
+        self, x: torch.Tensor, source: torch.Tensor, x_mask: torch.Tensor = None, source_mask: torch.Tensor = None
+    ) -> torch.Tensor:
         """
         Args:
             x (torch.Tensor): [N, L, C]
@@ -59,7 +69,16 @@ class LoFTREncoderLayer(nn.Module):
 class LocalFeatureTransformer(nn.Module):
     """A Local Feature Transformer (LoFTR) module."""
 
-    def __init__(self, d_model, nhead, layer_names, attention):
+    def __init__(self, d_model: int, nhead: int, layer_names: str, attention: str):
+        """
+        Initialize a LocalFeatureTransformer.
+
+        Args:
+            d_model (int): The number of expected features in the input.
+            nhead (int): The number of heads in the multiheadattention models.
+            layer_names (str): The names of the layers in the transformer.
+            attention (str): The type of attention mechanism to use.
+        """
         super(LocalFeatureTransformer, self).__init__()
 
         self.d_model = d_model
@@ -74,7 +93,9 @@ class LocalFeatureTransformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    def forward(self, feat0, feat1, mask0=None, mask1=None):
+    def forward(
+        self, feat0: torch.Tensor, feat1: torch.Tensor, mask0: torch.Tensor = None, mask1: torch.Tensor = None
+    ):
         """
         Args:
             feat0 (torch.Tensor): [N, L, C]

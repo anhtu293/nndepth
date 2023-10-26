@@ -1,9 +1,25 @@
+import torch
 import torch.nn as nn
 
 
 # Ref: https://github.com/princeton-vl/RAFT/blob/master/core/extractor.py
 class ResidualBlock(nn.Module):
-    def __init__(self, in_planes, planes, norm_fn="group", stride=1):
+    def __init__(self, in_planes: int, planes: int, norm_fn: str = "group", stride: int = 1):
+        """
+        Initialize a ResidualBlock.
+
+        Args:
+            in_planes (int): Number of input channels.
+            planes (int): Number of output channels.
+            norm_fn (str): Normalization function to use. Options are "group", "batch", "instance", or "none".
+            stride (int): Stride value for the convolutional layers.
+        """
+        assert norm_fn in [
+            "group",
+            "batch",
+            "isntance",
+            "none",
+        ], f"norm_fn must be in group, batch, instance, or none, found {norm_fn}"
         super(ResidualBlock, self).__init__()
 
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, padding=1, stride=stride)
@@ -34,7 +50,7 @@ class ResidualBlock(nn.Module):
 
         self.downsample = nn.Sequential(nn.Conv2d(in_planes, planes, kernel_size=1, stride=stride), self.norm3)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = x
         y = self.relu(self.norm1(self.conv1(y)))
         y = self.relu(self.norm2(self.conv2(y)))

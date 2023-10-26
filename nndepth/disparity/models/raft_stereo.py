@@ -13,19 +13,29 @@ from nndepth.disparity.models.cost_volume.raft_stereo import CorrBlock1D, GroupC
 
 
 class RAFTStereo(nn.Module):
-    """RAFT-Stereo: https://arxiv.org/pdf/2109.07547.pdf
-    """
+    """RAFT-Stereo: https://arxiv.org/pdf/2109.07547.pdf"""
 
     def __init__(
-            self,
-            hidden_dim=128,
-            context_dim=128,
-            corr_levels=4,
-            corr_radius=4,
-            tracing=False,
-            include_preprocessing=False,
-            **kwargs
+        self,
+        hidden_dim: int = 128,
+        context_dim: int = 128,
+        corr_levels: int = 4,
+        corr_radius: int = 4,
+        tracing: bool = False,
+        include_preprocessing: bool = False,
+        **kwargs
     ):
+        """Initialize the RAFTStereo model.
+
+        Args:
+            hidden_dim (int): The hidden dimension. Default is 128.
+            context_dim (int): The context dimension. Default is 128.
+            corr_levels (int): The number of correlation levels. Default is 4.
+            corr_radius (int): The correlation radius. Default is 4.
+            tracing (bool): Whether to enable tracing for ONNX exportation. Default is False.
+            include_preprocessing (bool): Whether to include preprocessing steps. Default is False.
+            **kwargs: Additional keyword arguments.
+        """
         super().__init__()
         self.fnet = self._init_fnet(**kwargs)
         self.hidden_dim = hidden_dim
@@ -115,17 +125,10 @@ class RAFTStereo(nn.Module):
         return up_flow.reshape(N, 1, rate * H, rate * W)
 
     def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
-        """Forward in backbone. This method must return fmap1, fmap2, cnet1 and guide_features
-        """
+        """Forward in backbone. This method must return fmap1, fmap2, cnet1 and guide_features"""
         raise NotImplementedError("Must be implemented in child class")
 
-    def forward(
-        self,
-        frame1: aloscene.Frame,
-        frame2: aloscene.Frame,
-        iters=12,
-        **kwargs
-    ):
+    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, iters=12, **kwargs):
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
         # forward backbone. This method must return fmap1, fmap2, cnet
@@ -159,8 +162,8 @@ class RAFTStereo(nn.Module):
 
 
 class BaseRAFTStereo(RAFTStereo):
-    """Original RAFT Stereo presented in the paper
-    """
+    """Original RAFT Stereo presented in the paper"""
+
     def _init_fnet(self):
         return BasicEncoder()
 
@@ -170,7 +173,7 @@ class BaseRAFTStereo(RAFTStereo):
             cor_planes=self.corr_levels * (self.corr_radius * 2 + 1),
             flow_channel=1,
             context_dim=self.context_dim,
-            spatial_scale=8
+            spatial_scale=8,
         )
 
     def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
@@ -185,15 +188,19 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
         super().__init__(**kwargs)
         assert self.corr_levels == 1, "Corr level must be 1 in Coarse2FineGroupRepViTRaftStereo"
         self.corr_fn = GroupCorrBlock1D
-        self.cnet_proj = nn.ModuleList([
-            MobileOneBlock(256, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
-            MobileOneBlock(64, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
-            MobileOneBlock(64, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
-        ])
-        self.fusion_blocks = nn.ModuleList([
-            FeatureFusionBlock(256, 64, 64, 1, 0),
-            FeatureFusionBlock(64, 16, 64, 1, 0),
-        ])
+        self.cnet_proj = nn.ModuleList(
+            [
+                MobileOneBlock(256, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
+                MobileOneBlock(64, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
+                MobileOneBlock(64, self.context_dim * 2, kernel_size=1, stride=1, padding=0),
+            ]
+        )
+        self.fusion_blocks = nn.ModuleList(
+            [
+                FeatureFusionBlock(256, 64, 64, 1, 0),
+                FeatureFusionBlock(64, 16, 64, 1, 0),
+            ]
+        )
 
     def _init_fnet(self, **kwargs):
         return RepViT(**kwargs)
@@ -205,7 +212,7 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
             flow_channel=1,
             context_dim=self.context_dim,
             gru="conv_gru",
-            spatial_scale=(4, 4)
+            spatial_scale=(4, 4),
         )
 
     def convex_upsample(self, flow, mask, rate: Union[Tuple[int, int], int] = (4, 4)):
@@ -223,13 +230,7 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
         up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)
         return up_flow.reshape(N, 1, rate[0] * H, rate[1] * W)
 
-    def forward(
-        self,
-        frame1: aloscene.Frame,
-        frame2: aloscene.Frame,
-        iters=12,
-        **kwargs
-    ):
+    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, iters=12, **kwargs):
         B = frame1.shape[0]
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 

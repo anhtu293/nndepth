@@ -1,12 +1,27 @@
 import torch
 import torch.nn as nn
+from typing import List, Tuple, Union
 
 from nndepth.blocks.residual_block import ResidualBlock
 
 
 class BasicEncoder(nn.Module):
-    def __init__(self, output_dim=128, norm_fn="batch", dropout=0.0):
+    def __init__(self, output_dim: int = 128, norm_fn: str = "batch", dropout: float = 0.0):
+        """Basic Encoder
+        Args:
+            output_dim (int): Number of channels of output feature. Default: 128.
+            norm_fn (str): Type of normalization layer. Possible values: [`batch`, `group`, `instance`, `none`].
+                Default: `batch`
+            dropout (float): Dropout rate. Default: 0.0
+        """
         super(BasicEncoder, self).__init__()
+        assert norm_fn in [
+            "batch",
+            "group",
+            "instance",
+            "none",
+        ], f"norm_fn must be in [`batch`, `group`, `instance`, `none`]. Found {norm_fn}"
+
         self.norm_fn = norm_fn
 
         if self.norm_fn == "group":
@@ -45,7 +60,7 @@ class BasicEncoder(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def _make_layer(self, dim, stride=1):
+    def _make_layer(self, dim: int, stride: int = 1) -> nn.Module:
         layer1 = ResidualBlock(self.in_planes, dim, self.norm_fn, stride=stride)
         layer2 = ResidualBlock(dim, dim, self.norm_fn, stride=1)
         layers = (layer1, layer2)
@@ -53,7 +68,7 @@ class BasicEncoder(nn.Module):
         self.in_planes = dim
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x: Union[torch.Tensor, Tuple[torch.Tensor], List[torch.Tensor]]) -> torch.Tensor:
         # if input is list, combine batch dimension
         is_list = isinstance(x, tuple) or isinstance(x, list)
         if is_list:

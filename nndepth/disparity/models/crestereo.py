@@ -18,25 +18,40 @@ class CREStereoBase(nn.Module):
     SUPPORTED_FNET_CLS = {
         "basic_encoder": BasicEncoder,
     }
-    SUPPORTED_UPDATE_CLS = {
-        "basic_update_block": BasicUpdateBlock
-    }
+    SUPPORTED_UPDATE_CLS = {"basic_update_block": BasicUpdateBlock}
 
     def __init__(
         self,
-        fnet_cls="basic_encoder",
-        update_cls="basic_update_block",
-        max_disp=192,
-        num_fnet_channels=256,
-        hidden_dim=128,
-        context_dim=128,
-        search_num=9,
-        mixed_precision=False,
-        test_mode=False,
-        tracing=False,
-        include_preprocessing=False,
+        fnet_cls: str = "basic_encoder",
+        update_cls: str = "basic_update_block",
+        max_disp: int = 192,
+        num_fnet_channels: int = 256,
+        hidden_dim: int = 128,
+        context_dim: int = 128,
+        search_num: int = 9,
+        mixed_precision: bool = False,
+        test_mode: bool = False,
+        tracing: bool = False,
+        include_preprocessing: bool = False,
         **kwargs,
     ):
+        """
+        Initialize the CREStereoBase model.
+
+        Args:
+            fnet_cls (str): The class name of the feature extraction network. Default is "basic_encoder".
+            update_cls (str): The class name of the update block. Default is "basic_update_block".
+            max_disp (int): The maximum disparity value. Default is 192.
+            num_fnet_channels (int): The number of channels in the feature extraction network. Default is 256.
+            hidden_dim (int): The hidden dimension size. Default is 128.
+            context_dim (int): The context dimension size. Default is 128.
+            search_num (int): The number of search iterations. Default is 9.
+            mixed_precision (bool): Whether to use mixed precision training. Default is False.
+            test_mode (bool): Whether to run the model in test mode. Default is False.
+            tracing (bool): Whether to enable tracing. Default is False.
+            include_preprocessing (bool): Whether to include preprocessing steps. Default is False.
+            **kwargs: Additional keyword arguments.
+        """
         super(CREStereoBase, self).__init__()
 
         self.max_flow = max_disp
@@ -141,7 +156,7 @@ class CREStereoBase(nn.Module):
         iters=10,
         upsample=True,
         test_mode=False,
-        **kwargs
+        **kwargs,
     ):
         """Estimate optical flow between pair of frames"""
 
