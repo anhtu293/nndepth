@@ -1,5 +1,6 @@
 from torch import nn
 import torch
+import torch.nn.functional as F
 from typing import List, Dict
 
 import aloscene
@@ -21,25 +22,32 @@ class DisparityCriterion(nn.Module):
         n_predictions = len(m_outputs)
         flow_loss = 0.0
 
-        # exlude invalid pixels and extremely large diplacements
-        mag = torch.sum(flow_gt**2, dim=1, keepdim=True).sqrt()
-        valid = mag < max_flow
         for i in range(n_predictions):
             m_dict = m_outputs[i]
             i_weight = gamma ** (n_predictions - i - 1)
-            i_loss = (m_dict["up_flow"] - flow_gt).abs()
+
+            if m_dict["up_disp"].shape[-2:] != flow_gt.shape[-2:]:
+                scale = flow_gt.shape[-1] // m_dict["up_disp"].shape[-1]
+                gt = -F.max_pool2d(-flow_gt, kernel_size=scale) / scale
+                gt = F.interpolate(gt, size=m_dict["up_disp"].shape[-2:])
+            else:
+                gt = flow_gt
+
+            mag = torch.sum(gt**2, dim=1, keepdim=True).sqrt()
+            valid = mag < max_flow
+            i_loss = (m_dict["up_disp"] - gt).abs()
             flow_loss += i_weight * (valid * i_loss).mean()
 
         if compute_per_iter:
             epe_per_iter = []
             for i in range(n_predictions):
                 m_dict = m_outputs[i]
-                epe = torch.sum((m_dict["up_flow"] - flow_gt) ** 2, dim=1).sqrt()
+                epe = torch.sum((m_dict["up_disp"] - flow_gt) ** 2, dim=1).sqrt()
                 epe = epe.view(-1)[valid.view(-1)]
                 epe_per_iter.append(epe)
         else:
             epe_per_iter = None
-        epe = torch.sum((m_outputs[-1]["up_flow"] - flow_gt) ** 2, dim=1).sqrt()
+        epe = torch.sum((m_outputs[-1]["up_disp"] - flow_gt) ** 2, dim=1).sqrt()
         epe = epe.view(-1)[valid.view(-1)]
 
         metrics = {

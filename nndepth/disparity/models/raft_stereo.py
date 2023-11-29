@@ -9,7 +9,10 @@ from nndepth.blocks.conv import MobileOneBlock, FeatureFusionBlock
 from nndepth.extractors.rep_vit import RepViT
 from nndepth.extractors.basic_encoder import BasicEncoder
 from nndepth.blocks.update_block import BasicUpdateBlock
-from nndepth.disparity.models.cost_volume.raft_stereo import CorrBlock1D, GroupCorrBlock1D
+from nndepth.disparity.models.cost_volume.raft_stereo import (
+    CorrBlock1D,
+    GroupCorrBlock1D,
+)
 
 
 class RAFTStereo(nn.Module):
@@ -17,6 +20,7 @@ class RAFTStereo(nn.Module):
 
     def __init__(
         self,
+        iters: int = 12,
         hidden_dim: int = 128,
         context_dim: int = 128,
         corr_levels: int = 4,
@@ -38,6 +42,7 @@ class RAFTStereo(nn.Module):
         """
         super().__init__()
         self.fnet = self._init_fnet(**kwargs)
+        self.iters = iters
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
         self.corr_levels = corr_levels
@@ -96,7 +101,10 @@ class RAFTStereo(nn.Module):
     def inference(self, m_outputs: Dict[str, torch.Tensor], only_last=False):
         def generate_frame(out_dict):
             return aloscene.Disparity(
-                out_dict["up_flow"], names=("B", "C", "H", "W"), camera_side="left", disp_format="signed"
+                out_dict["up_disp"],
+                names=("B", "C", "H", "W"),
+                camera_side="left",
+                disp_format="signed",
             )
 
         if only_last:
@@ -117,18 +125,18 @@ class RAFTStereo(nn.Module):
         mask = mask.view(N, 1, 9, rate, rate, H, W)
         mask = torch.softmax(mask, dim=2)
 
-        up_flow = F.unfold(rate * flow, [3, 3], padding=1)
-        up_flow = up_flow.view(N, 1, 9, 1, 1, H, W)
+        up_disp = F.unfold(rate * flow, [3, 3], padding=1)
+        up_disp = up_disp.view(N, 1, 9, 1, 1, H, W)
 
-        up_flow = torch.sum(mask * up_flow, dim=2)
-        up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)
-        return up_flow.reshape(N, 1, rate * H, rate * W)
+        up_disp = torch.sum(mask * up_disp, dim=2)
+        up_disp = up_disp.permute(0, 1, 4, 2, 5, 3)
+        return up_disp.reshape(N, 1, rate * H, rate * W)
 
     def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
         """Forward in backbone. This method must return fmap1, fmap2, cnet1 and guide_features"""
         raise NotImplementedError("Must be implemented in child class")
 
-    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, iters=12, **kwargs):
+    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, **kwargs):
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
         # forward backbone. This method must return fmap1, fmap2, cnet
@@ -149,14 +157,14 @@ class RAFTStereo(nn.Module):
         org_coords = self.initialize_coords(fmap1)
 
         m_outputs = []
-        for _ in range(iters):
+        for _ in range(self.iters):
             coords1 = coords1.detach()
             sampled_corr = corr(coords1)
             net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1 - org_coords)
             coords1 = coords1 + delta_disp
             disp = coords1 - org_coords
             up_disp = self.convex_upsample(disp, mask, rate=fnet_ds)
-            m_outputs.append({"up_flow": up_disp})
+            m_outputs.append({"up_disp": up_disp})
 
         return m_outputs
 
@@ -223,14 +231,14 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
         mask = mask.view(N, 1, 9, rate[0], rate[1], H, W)
         mask = torch.softmax(mask, dim=2)
 
-        up_flow = F.unfold(rate[1] * flow, [3, 3], padding=1)
-        up_flow = up_flow.view(N, 1, 9, 1, 1, H, W)
+        up_disp = F.unfold(rate[1] * flow, [3, 3], padding=1)
+        up_disp = up_disp.view(N, 1, 9, 1, 1, H, W)
 
-        up_flow = torch.sum(mask * up_flow, dim=2)
-        up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)
-        return up_flow.reshape(N, 1, rate[0] * H, rate[1] * W)
+        up_disp = torch.sum(mask * up_disp, dim=2)
+        up_disp = up_disp.permute(0, 1, 4, 2, 5, 3)
+        return up_disp.reshape(N, 1, rate[0] * H, rate[1] * W)
 
-    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, iters=12, **kwargs):
+    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, **kwargs):
         B = frame1.shape[0]
         frame1, frame2 = self._preprocess_input(frame1, frame2)
 
@@ -260,7 +268,7 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
 
             coords1 = init_coords.detach()
 
-            for _ in range(iters):
+            for _ in range(self.iters):
                 coords1 = coords1.detach()
                 sampled_corr = corr(coords1)
                 net, mask, delta_disp = self.update_block(net, inp, sampled_corr, coords1 - org_coords)
@@ -273,7 +281,7 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
                     disp_at_org_size = up_disp
                 else:
                     disp_at_org_size = nn.functional.interpolate(up_disp, size=frame1.shape[-2:]) * rate
-                m_outputs.append({"up_flow": disp_at_org_size})
+                m_outputs.append({"up_disp": disp_at_org_size})
             if idx < len(features) - 1:
                 org_coords = self.initialize_coords(torch.split(features[idx + 1], [B, B], dim=0)[0])
                 init_coords = org_coords + up_disp.detach()

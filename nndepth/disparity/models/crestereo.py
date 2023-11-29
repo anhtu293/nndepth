@@ -15,15 +15,14 @@ from nndepth.blocks.transformer import LocalFeatureTransformer
 class CREStereoBase(nn.Module):
     """CreStereo: https://arxiv.org/abs/2203.11483"""
 
-    SUPPORTED_FNET_CLS = {
-        "basic_encoder": BasicEncoder,
-    }
+    SUPPORTED_FNET_CLS = {"basic_encoder": {"cls": BasicEncoder, "downsample": 8}}
     SUPPORTED_UPDATE_CLS = {"basic_update_block": BasicUpdateBlock}
 
     def __init__(
         self,
         fnet_cls: str = "basic_encoder",
         update_cls: str = "basic_update_block",
+        iters: int = 12,
         max_disp: int = 192,
         num_fnet_channels: int = 256,
         hidden_dim: int = 128,
@@ -57,6 +56,7 @@ class CREStereoBase(nn.Module):
         self.max_flow = max_disp
         self.mixed_precision = mixed_precision
         self.test_mode = test_mode
+        self.iters = iters
 
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -64,19 +64,26 @@ class CREStereoBase(nn.Module):
         self.tracing = tracing
         self.include_preprocessing = include_preprocessing
 
-        self.fnet = self.SUPPORTED_FNET_CLS[fnet_cls](
+        self.fnet = self.SUPPORTED_FNET_CLS[fnet_cls]["cls"](
             output_dim=num_fnet_channels, norm_fn="instance", dropout=self.dropout
         )
+        self.fnet_ds = self.SUPPORTED_FNET_CLS[fnet_cls]["downsample"]
         self.update_block = self.SUPPORTED_UPDATE_CLS[update_cls](
-            hidden_dim=self.hidden_dim, cor_planes=4 * 9, spatial_scale=4
+            hidden_dim=self.hidden_dim, cor_planes=4 * 9, spatial_scale=self.fnet_ds
         )
 
         # loftr
         self.self_att_fn = LocalFeatureTransformer(
-            d_model=num_fnet_channels, nhead=8, layer_names=["self"] * 1, attention="linear"
+            d_model=num_fnet_channels,
+            nhead=8,
+            layer_names=["self"] * 1,
+            attention="linear",
         )
         self.cross_att_fn = LocalFeatureTransformer(
-            d_model=num_fnet_channels, nhead=8, layer_names=["cross"] * 1, attention="linear"
+            d_model=num_fnet_channels,
+            nhead=8,
+            layer_names=["cross"] * 1,
+            attention="linear",
         )
 
         # adaptive search
@@ -122,12 +129,12 @@ class CREStereoBase(nn.Module):
         mask = mask.view(N, 1, 9, rate, rate, H, W)
         mask = torch.softmax(mask, dim=2)
 
-        up_flow = F.unfold(rate * flow, [3, 3], padding=1)
-        up_flow = up_flow.view(N, 2, 9, 1, 1, H, W)
+        up_disp = F.unfold(rate * flow, [3, 3], padding=1)
+        up_disp = up_disp.view(N, 2, 9, 1, 1, H, W)
 
-        up_flow = torch.sum(mask * up_flow, dim=2)
-        up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)
-        return up_flow.reshape(N, 2, rate * H, rate * W)
+        up_disp = torch.sum(mask * up_disp, dim=2)
+        up_disp = up_disp.permute(0, 1, 4, 2, 5, 3)
+        return up_disp.reshape(N, 2, rate * H, rate * W)
 
     def zero_init(self, fmap):
         N, C, H, W = fmap.shape
@@ -140,7 +147,10 @@ class CREStereoBase(nn.Module):
     def inference(self, m_outputs, only_last=False):
         def generate_frame(out_dict):
             return aloscene.Disparity(
-                out_dict["up_flow"], names=("B", "C", "H", "W"), camera_side="left", disp_format="signed"
+                out_dict["up_disp"],
+                names=("B", "C", "H", "W"),
+                camera_side="left",
+                disp_format="signed",
             )
 
         if only_last:
@@ -153,7 +163,6 @@ class CREStereoBase(nn.Module):
         frame1: aloscene.Frame,
         frame2: aloscene.Frame,
         flow_init=None,
-        iters=10,
         upsample=True,
         test_mode=False,
         **kwargs,
@@ -169,7 +178,6 @@ class CREStereoBase(nn.Module):
         image2 = image2.contiguous()
 
         hdim = self.hidden_dim
-        # cdim = self.context_dim
 
         # run the feature network
         fmap1, fmap2 = self.fnet([image1, image2])
@@ -177,7 +185,7 @@ class CREStereoBase(nn.Module):
         fmap1 = fmap1.float()
         fmap2 = fmap2.float()
 
-        # 1/4 -> 1/8
+        # 1/fnet_ds -> 1/(fnet_ds * 2)
         # feature
         fmap1_dw8 = F.avg_pool2d(fmap1, 2, stride=2)
         fmap2_dw8 = F.avg_pool2d(fmap2, 2, stride=2)
@@ -193,7 +201,7 @@ class CREStereoBase(nn.Module):
         net_dw8 = F.avg_pool2d(net, 2, stride=2)
         inp_dw8 = F.avg_pool2d(inp, 2, stride=2)
 
-        # 1/4 -> 1/16
+        # 1/fnet_ds -> 1/(fnet_ds * 4)
         # feature
         fmap1_dw16 = F.avg_pool2d(fmap1, 4, stride=4)
         fmap2_dw16 = F.avg_pool2d(fmap2, 4, stride=4)
@@ -206,7 +214,7 @@ class CREStereoBase(nn.Module):
 
         # positional encoding and self-attention
         pos_encoding_fn_small = PositionEncodingSine(
-            d_model=256, max_shape=(image1.shape[2] // 16, image1.shape[3] // 16)
+            d_model=256, max_shape=(image1.shape[2] // (self.fnet_ds * 4), image1.shape[3] // (self.fnet_ds * 4))
         )
 
         # 'n c h w -> n (h w) c'
@@ -219,7 +227,7 @@ class CREStereoBase(nn.Module):
 
         fmap1_dw16, fmap2_dw16 = self.self_att_fn(fmap1_dw16, fmap2_dw16)
         fmap1_dw16, fmap2_dw16 = [
-            x.reshape(x.shape[0], image1.shape[2] // 16, -1, x.shape[2]).permute(0, 3, 1, 2)
+            x.reshape(x.shape[0], image1.shape[2] // (self.fnet_ds * 4), -1, x.shape[2]).permute(0, 3, 1, 2)
             for x in [fmap1_dw16, fmap2_dw16]
         ]
 
@@ -227,11 +235,9 @@ class CREStereoBase(nn.Module):
         corr_fn_dw8 = AGCL(fmap1_dw8, fmap2_dw8)
         corr_fn_att_dw16 = AGCL(fmap1_dw16, fmap2_dw16, att=self.cross_att_fn)
 
-        # Cascaded refinement (1/16 + 1/8 + 1/4)
+        # Cascaded refinement (1/(fnet_ds*4) + 1/(fnet_ds*2) + 1/fnet_ds)
         m_outputs = []
-        # predictions = []
         flow = None
-        flow_up = None
         if flow_init is not None:
             scale = fmap1.shape[2] / flow_init.shape[2]
             flow = -scale * F.interpolate(
@@ -245,8 +251,8 @@ class CREStereoBase(nn.Module):
             flow_dw16 = self.zero_init(fmap1_dw16)
 
             # Recurrent Update Module
-            # RUM: 1/16
-            for itr in range(iters // 2):
+            # RUM: 1/(fnet_ds * 4)
+            for itr in range(self.iters // 2):
                 if itr % 2 == 0:
                     small_patch = False
                 else:
@@ -258,15 +264,9 @@ class CREStereoBase(nn.Module):
                 net_dw16, up_mask, delta_flow = self.update_block(net_dw16, inp_dw16, out_corrs, flow_dw16)
 
                 flow_dw16 = flow_dw16 + delta_flow
-                flow = self.convex_upsample(flow_dw16, up_mask, rate=4)
-                flow_up = 4 * F.interpolate(
-                    flow,
-                    size=(4 * flow.shape[2], 4 * flow.shape[3]),
-                    mode="bilinear",
-                    align_corners=True,
-                )
-                # predictions.append(flow_up)
-                m_outputs.append({"up_flow": flow_up})
+                flow = self.convex_upsample(flow_dw16, up_mask, rate=self.fnet_ds)
+
+                m_outputs.append({"up_disp": flow})
 
             scale = fmap1_dw8.shape[2] / flow.shape[2]
             flow_dw8 = scale * F.interpolate(
@@ -276,8 +276,8 @@ class CREStereoBase(nn.Module):
                 align_corners=True,
             )
 
-            # RUM: 1/8
-            for itr in range(iters // 2):
+            # RUM: 1/(fnet_ds * 2)
+            for itr in range(self.iters // 2):
                 if itr % 2 == 0:
                     small_patch = False
                 else:
@@ -289,14 +289,8 @@ class CREStereoBase(nn.Module):
                 net_dw8, up_mask, delta_flow = self.update_block(net_dw8, inp_dw8, out_corrs, flow_dw8)
 
                 flow_dw8 = flow_dw8 + delta_flow
-                flow = self.convex_upsample(flow_dw8, up_mask, rate=4)
-                flow_up = 2 * F.interpolate(
-                    flow,
-                    size=(2 * flow.shape[2], 2 * flow.shape[3]),
-                    mode="bilinear",
-                    align_corners=True,
-                )
-                m_outputs.append({"up_flow": flow_up})
+                flow = self.convex_upsample(flow_dw8, up_mask, rate=self.fnet_ds)
+                m_outputs.append({"up_disp": flow})
 
             scale = fmap1.shape[2] / flow.shape[2]
             flow = scale * F.interpolate(
@@ -306,8 +300,8 @@ class CREStereoBase(nn.Module):
                 align_corners=True,
             )
 
-        # RUM: 1/4
-        for itr in range(iters):
+        # RUM: 1/self.fnet_ds
+        for itr in range(self.iters):
             if itr % 2 == 0:
                 small_patch = False
             else:
@@ -319,18 +313,12 @@ class CREStereoBase(nn.Module):
             net, up_mask, delta_flow = self.update_block(net, inp, out_corrs, flow)
 
             flow = flow + delta_flow
-            flow_up = self.convex_upsample(flow, up_mask, rate=4)
+            flow_up = self.convex_upsample(flow, up_mask, rate=self.fnet_ds)
+
             # predictions.append(flow_up)
-            m_outputs.append({"up_flow": flow_up})
+            m_outputs.append({"up_disp": flow_up})
 
         if self.test_mode:
             return flow_up
 
         return m_outputs
-
-
-class CREStereo(CREStereoBase):
-    def __init__(self):
-        fnet_cls = "basic_encoder"
-        update_cls = "basic_update_block"
-        super().__init__(fnet_cls=fnet_cls, update_cls=update_cls)

@@ -1,31 +1,42 @@
+import yaml
+from argparse import Namespace
 from torch.utils.data import SequentialSampler, RandomSampler
 import pytorch_lightning as pl
-
+from typing import Tuple
 import alonet
 
 
 class Data2DisparityModel(pl.LightningDataModule):
-    def __init__(self, args, **kwargs):
-        alonet.common.pl_helpers.params_update(self, args, kwargs)
-        self.batch_size = args.batch_size
-        self.train_on_val = args.train_on_val
-        self.num_workers = args.num_workers
-        self.sequential = args.sequential_sampler
-        self.sequence_size = max(1, args.sequence_size)
-        self.HW = tuple(args.HW)
-        self.args = args
+    def __init__(
+        self,
+        batch_size: int = 5,
+        num_workers: int = 8,
+        sequential: bool = False,
+        HW: Tuple[int, int] = [384, 496],
+        args: Namespace = None,
+        **kwargs
+    ):
+        default_cfg = {
+            "batch_size": batch_size,
+            "num_workers": num_workers,
+            "sequential": sequential,
+            "HW": HW,
+        }
+        if args is not None and args.data_config is not None:
+            with open(args.data_config, "r") as f:
+                config = yaml.load(f, Loader=yaml.FullLoader)
+            self.config = {**default_cfg, **config}
+        else:
+            self.config = default_cfg
+
+        for key, val in self.config.items():
+            setattr(self, key, val)
         super().__init__()
 
     @staticmethod
     def add_argparse_args(parent_parser):
         parser = parent_parser.add_argument_group("Data2DisparityModel")
-        parser.add_argument("--batch_size", type=int, default=5, help="Batch size")
-        parser.add_argument("--train_on_val", action="store_true")
-        parser.add_argument("--num_workers", type=int, default=8, help="num_workers to use on the dataset")
-        parser.add_argument("--sequential_sampler", action="store_true", help="sample data sequentially (no shuffle)")
-        parser.add_argument("--sequence_size", default=0, type=int, help="Size of the desired sequence")
-        parser.add_argument("--HW", type=int, default=[368, 496], nargs=2, help="Size H W of resized frame")
-
+        parser.add_argument("--data_config", type=str, default=None, help="Path to data config file")
         return parent_parser
 
     def train_transform(self, frames):

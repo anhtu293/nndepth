@@ -17,7 +17,7 @@ class ResidualBlock(nn.Module):
         assert norm_fn in [
             "group",
             "batch",
-            "isntance",
+            "instance",
             "none",
         ], f"norm_fn must be in group, batch, instance, or none, found {norm_fn}"
         super(ResidualBlock, self).__init__()

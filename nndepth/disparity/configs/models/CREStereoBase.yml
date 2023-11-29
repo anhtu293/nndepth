@@ -1,0 +1,12 @@
+context_dim: 128
+fnet_cls: basic_encoder
+hidden_dim: 128
+include_preprocessing: false
+iters: 4
+max_disp: 192
+mixed_precision: false
+num_fnet_channels: 256
+search_num: 9
+test_mode: false
+tracing: false
+update_cls: basic_update_block

@@ -2,7 +2,7 @@ from typing import List, Dict
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor
 import torch.optim as optim
-import json
+import yaml
 
 import alonet
 import aloscene
@@ -26,12 +26,12 @@ class LitDisparityModel(pl.LightningModule):
         parser = parent_parser.add_argument_group("LitDisparityModule")
         parser.add_argument("--model_config", required=True, help="Path to model json config file")
         parser.add_argument("--lr", type=float, default=4e-4, help="Learning rate")
-        parser.add_argument("--iters", type=int, default=12, help="Number of refinement iterations")
         return parent_parser
 
     def build_model(self):
-        with open(self.model_config) as f:
-            config = json.load(f)
+        with open(self.model_config, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+
         for cls in MODELS:
             if self.model_name == cls.__name__:
                 return cls(**config)
@@ -66,7 +66,7 @@ class LitDisparityModel(pl.LightningModule):
         frame1 = frames["left"]
         frame2 = frames["right"]
         # run forward pass model
-        m_outputs = self.model(frame1, frame2, iters=self.iters, **kwargs)
+        m_outputs = self.model(frame1, frame2, **kwargs)
         return m_outputs
 
     def inference(self, m_outputs, **kwargs):
@@ -78,7 +78,7 @@ class LitDisparityModel(pl.LightningModule):
         frame1 = frames["left"]
         frame2 = frames["right"]
         # run forward pass model
-        m_outputs = self.model(frame1, frame2, iters=self.iters)
+        m_outputs = self.model(frame1, frame2)
         loss, metrics, epe_per_iter = self.criterion(m_outputs, frame1)
         outputs = {"loss": loss, "metrics": metrics, "epe_per_iter": epe_per_iter}
         return outputs
@@ -89,7 +89,7 @@ class LitDisparityModel(pl.LightningModule):
         frame1 = frames["left"]
         frame2 = frames["right"]
         # run forward pass model
-        m_outputs = self.model(frame1, frame2, iters=self.iters)
+        m_outputs = self.model(frame1, frame2)
         loss, metrics, epe_per_iter = self.criterion(m_outputs, frame1, compute_per_iter=False)
         self.log("val_loss", loss.detach())
         outputs = {"val_loss": loss, "metrics": metrics, "epe_per_iter": epe_per_iter}
@@ -119,7 +119,14 @@ class LitDisparityModel(pl.LightningModule):
         disp_viz = DisparityVisualizationCallback(data_loader)
         return [metrics_callback, lr_monitor, disp_viz]
 
-    def run_train(self, data_loader, args, project="disparity", expe_name="disparity", callbacks: List = None):
+    def run_train(
+        self,
+        data_loader,
+        args,
+        project="disparity",
+        expe_name="disparity",
+        callbacks: List = None,
+    ):
         callbacks = self.callbacks(data_loader) if callbacks is None else callbacks
         alonet.common.pl_helpers.run_pl_training(
             self,
@@ -130,7 +137,14 @@ class LitDisparityModel(pl.LightningModule):
             expe_name=expe_name,
         )
 
-    def run_validation(self, data_loader, args, project="disparity", expe_name="disparity", callbacks: list = None):
+    def run_validation(
+        self,
+        data_loader,
+        args,
+        project="disparity",
+        expe_name="disparity",
+        callbacks: list = None,
+    ):
         """Validate the model using pytorch lightning"""
         # Set the default callbacks if not provide.
         callbacks = callbacks if callbacks is not None else self.callbacks(data_loader)

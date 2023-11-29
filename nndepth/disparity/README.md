@@ -50,26 +50,10 @@ pl_helper:
   --no_suffix           do not add date suffix to expe_name
   --nostrict            load from checkpoint to run a model with different weights names (default False)
 
-Data2DisparityModel:
-  --batch_size BATCH_SIZE
-                        Batch size
-  --train_on_val
-  --num_workers NUM_WORKERS
-                        num_workers to use on the dataset
-  --sequential_sampler  sample data sequentially (no shuffle)
-  --sequence_size SEQUENCE_SIZE
-                        Size of the desired sequence
-  --HW HW HW            Size H W of resized frame
-
-Tartain2DisparityModel:
-  --train_envs TRAIN_ENVS [TRAIN_ENVS ...]
-  --val_envs VAL_ENVS [VAL_ENVS ...]
-
 LitDisparityModule:
   --model_config MODEL_CONFIG
                         Path to model json config file
   --lr LR               Learning rate
-  --iters ITERS         Number of refinement iterations
 ```
 - Details of models and how to run the training with those models are below.
 
@@ -167,7 +151,7 @@ LitDisparityModule:
 - `MobilenetLarge-V3` is used as backbone.
 
   ## Training command
-  ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/models/configs/IGEVStereoMBNet.json --iters 6 --batch_size 4 --accumulate_grad_batches 2 --lr 5e-5 --limit_val_batches 200 --max_step 150000 --HW 384 480 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save
-  ```
+```bash
+python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/configs/models/CREStereoBase.yml --data_config nndepth/disparity/configs/data/CREStereoBase_Tartanair2DisparityModel.yml --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 100000 --expe_name baseline --log --save
+```
 </details>

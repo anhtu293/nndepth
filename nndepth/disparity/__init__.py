@@ -1,10 +1,13 @@
 from nndepth.disparity.models import (
-    CREStereo, IGEVStereoMBNet, BaseRAFTStereo, Coarse2FineGroupRepViTRAFTStereo
+    CREStereoBase,
+    IGEVStereoMBNet,
+    BaseRAFTStereo,
+    Coarse2FineGroupRepViTRAFTStereo,
 )
 
 
 MODELS = [
-    CREStereo,
+    CREStereoBase,
     IGEVStereoMBNet,
     BaseRAFTStereo,
     Coarse2FineGroupRepViTRAFTStereo,
