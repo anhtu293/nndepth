@@ -13,8 +13,8 @@ def main():
     parser = LitDisparityModel.add_argparse_args(parser)
     args = parser.parse_args()
 
-    lit = LitDisparityModel(args)
-    tartan_loader = Tartanair2DisparityModel(args)
+    lit = LitDisparityModel(args=args)
+    tartan_loader = Tartanair2DisparityModel(args=args)
     if args.expe_name is None:
         expe_name = "disparity_on_tartanair"
     else:

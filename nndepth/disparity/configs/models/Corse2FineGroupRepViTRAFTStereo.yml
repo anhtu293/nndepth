@@ -1,0 +1,20 @@
+context_dim: 64
+corr_levels: 1
+corr_radius: 4
+downsample_ratios: [[2, 2], [2, 2], [2, 2], [2, 2]]
+ffn_exp_ratios: [1.0, 3.0, 3.0, 4.0]
+hidden_dim: 64
+include_preprocessing: false
+iters: 12
+num_blocks_per_stage: [4, 4, 6, 2]
+num_groups: 4
+patch_size: 7
+stem_strides: [[2, 2], [2, 2], [1, 1]]
+token_mixer_types:
+- repmixer
+- repmixer
+- repmixer
+- attention
+tracing: false
+use_ffn_per_stage: [false, true, true, true]
+width_multipliers: [1, 1, 1, 1]

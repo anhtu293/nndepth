@@ -1,27 +1,31 @@
-import torch
+from argparse import Namespace
 from torch.utils.data import SequentialSampler, RandomSampler
-
-import aloscene
-import alonet
+from typing import List
 
 from nndepth.datasets import TartanairDataset
 from nndepth.disparity.data_modules.data2disparity import Data2DisparityModel
 
 
 class Tartanair2DisparityModel(Data2DisparityModel):
-    def __init__(self, args, **kwargs):
-        alonet.common.pl_helpers.params_update(self, args, kwargs)
+    def __init__(
+        self,
+        train_envs: List[str] = ["abandonedfactory"],
+        val_envs: List[str] = ["abandonedfactory_night"],
+        args: Namespace = None,
+        **kwargs
+    ):
+        super().__init__(args=args)
         self.val_names = ["Tartanair"]
-        self.train_envs = args.train_envs
-        self.val_envs = args.val_envs
-        super().__init__(args)
+        default_cfg = {"train_envs": train_envs, "val_envs": val_envs}
+        self.config = {**default_cfg, **self.config}
+        self.train_envs = self.config["train_envs"]
+        self.val_envs = self.config["val_envs"]
 
     def _setup_train_dataset(self):
         self.train_dataset = TartanairDataset(
             envs=self.train_envs,
             cameras=["left", "right"],
             labels=["disp"],
-            sequence_size=self.sequence_size,
             transform_fn=lambda f: self.train_transform(Tartanair2DisparityModel.adapt(f)),
             ignore_errors=True,
         )
@@ -31,7 +35,6 @@ class Tartanair2DisparityModel(Data2DisparityModel):
             envs=self.val_envs,
             cameras=["left", "right"],
             labels=["disp"],
-            sequence_size=self.sequence_size,
             transform_fn=lambda f: self.val_transform(Tartanair2DisparityModel.adapt(f)),
             ignore_errors=True,
         )

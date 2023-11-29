@@ -47,7 +47,8 @@ class DisparityVisualizationCallback(pl.Callback):
         # Log each iterations
         for it, disp_pred in enumerate(disparities):
             disp_pred = disp_pred[0].detach().cpu()
-            disp_pred_img = self.get_disp_img(disp_pred, disp_min, disp_max)
+            scale = disp_pred.shape[-1] / disp_gt.shape[-2]
+            disp_pred_img = self.get_disp_img(disp_pred, disp_min, disp_max * scale)
             log_image(trainer, f"{name}/disp/pred_iter/disp_iter{it}", [{"image": disp_pred_img}])
 
         # Log final disp
