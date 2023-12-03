@@ -52,6 +52,7 @@ class CREStereoBase(nn.Module):
             **kwargs: Additional keyword arguments.
         """
         super(CREStereoBase, self).__init__()
+        assert context_dim == hidden_dim, "Context dim must be equal to hidden_dim in this model"
 
         self.max_flow = max_disp
         self.mixed_precision = mixed_precision

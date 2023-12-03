@@ -21,6 +21,7 @@ class RAFTStereo(nn.Module):
     def __init__(
         self,
         iters: int = 12,
+        fnet_dim: int = 256,
         hidden_dim: int = 128,
         context_dim: int = 128,
         corr_levels: int = 4,
@@ -41,12 +42,16 @@ class RAFTStereo(nn.Module):
             **kwargs: Additional keyword arguments.
         """
         super().__init__()
-        self.fnet = self._init_fnet(**kwargs)
         self.iters = iters
+        self.fnet_dim = fnet_dim
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
         self.corr_levels = corr_levels
         self.corr_radius = corr_radius
+        self.fnet = self._init_fnet(**kwargs)
+        self.cnet_proj = nn.Sequential(
+            nn.Conv2d(fnet_dim, self.context_dim + self.hidden_dim, kernel_size=3, padding=1), nn.ReLU(False)
+        )
 
         self.update_block = self._init_update_block()
         self.corr_fn = CorrBlock1D
@@ -146,8 +151,8 @@ class RAFTStereo(nn.Module):
         fmap1 = fmap1.float()
         fmap2 = fmap2.float()
 
-        C = cnet1.shape[1]
-        net, inp = torch.split(cnet1, C // 2, dim=1)
+        # C = cnet1.shape[1]
+        net, inp = torch.split(cnet1, [self.hidden_dim, self.context_dim], dim=1)
         net = torch.tanh(net)
         inp = F.relu(inp)
 
@@ -173,7 +178,7 @@ class BaseRAFTStereo(RAFTStereo):
     """Original RAFT Stereo presented in the paper"""
 
     def _init_fnet(self):
-        return BasicEncoder()
+        return BasicEncoder(output_dim=self.fnet_dim)
 
     def _init_update_block(self):
         return BasicUpdateBlock(
@@ -186,7 +191,7 @@ class BaseRAFTStereo(RAFTStereo):
 
     def forward_fnet(self, frame1: torch.Tensor, frame2: torch.Tensor):
         fmap1, fmap2 = self.fnet([frame1, frame2])
-        cnet = fmap1.clone()
+        cnet = self.cnet_proj(fmap1)
         return fmap1, fmap2, cnet
 
 
