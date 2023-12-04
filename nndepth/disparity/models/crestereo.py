@@ -11,6 +11,8 @@ from nndepth.disparity.models.cost_volume.crestereo import AGCL
 from nndepth.blocks.pos_enc import PositionEncodingSine
 from nndepth.blocks.transformer import LocalFeatureTransformer
 
+from nndepth.utils.common import load_weights
+
 
 class CREStereoBase(nn.Module):
     """CreStereo: https://arxiv.org/abs/2203.11483"""
@@ -32,6 +34,8 @@ class CREStereoBase(nn.Module):
         test_mode: bool = False,
         tracing: bool = False,
         include_preprocessing: bool = False,
+        weights: str = None,
+        strict_load: bool = True,
         **kwargs,
     ):
         """
@@ -93,6 +97,12 @@ class CREStereoBase(nn.Module):
         self.conv_offset_8 = nn.Conv2d(num_fnet_channels, self.search_num * 2, kernel_size=3, stride=1, padding=1)
         self.range_16 = 1
         self.range_8 = 1
+
+        # load weights
+        self.weights = weights
+        self.strict_load = strict_load
+        if weights is not None:
+            load_weights(self, weights=weights, strict_load=strict_load)
 
     def _preprocess_input(self, frame1: aloscene.Frame, frame2: aloscene.Frame):
         if self.tracing:

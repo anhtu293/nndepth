@@ -10,6 +10,7 @@ import aloscene
 from nndepth.disparity import MODELS
 from nndepth.disparity.criterion import DisparityCriterion
 from nndepth.disparity.callbacks import DisparityVisualizationCallback
+from nndepth.utils.common import ConfigRegisterCallback
 
 
 class LitDisparityModel(pl.LightningModule):
@@ -117,7 +118,8 @@ class LitDisparityModel(pl.LightningModule):
         metrics_callback = alonet.callbacks.MetricsCallback(val_names=data_loader.val_names)
         lr_monitor = LearningRateMonitor(logging_interval="step")
         disp_viz = DisparityVisualizationCallback(data_loader)
-        return [metrics_callback, lr_monitor, disp_viz]
+        config_register = ConfigRegisterCallback()
+        return [metrics_callback, lr_monitor, disp_viz, config_register]
 
     def run_train(
         self,

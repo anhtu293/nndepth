@@ -60,31 +60,30 @@ LitDisparityModule:
 ## 3. How to launch the inference
 - Script `nndepth/disparity/scripts/inference.py`:
 ```
+usage: inference.py [-h] --model_config_file MODEL_CONFIG_FILE --weights WEIGHTS --left_path LEFT_PATH --right_path RIGHT_PATH [--HW HW [HW ...]] --output OUTPUT [--render]
+                    [--save_format {image,video}]
+
 options:
   -h, --help            show this help message and exit
-  --weight WEIGHT     Path to model weight
+  --model_config_file MODEL_CONFIG_FILE
+                        Path to model config file
+  --weights WEIGHTS     Path to model weight
   --left_path LEFT_PATH
                         Path to directory of left images
   --right_path RIGHT_PATH
                         Path to directory of right images
+  --HW HW [HW ...]      Model input size
   --output OUTPUT       Path to save output. Directory in case of save_format == image, mp4 file in case of video
   --render              Render results
   --save_format {image,video}
                         Which format to save output. image or video are supported. Default: video
-
-LitDisparityModule:
-  --model_config MODEL_CONFIG
-                        Path to model json config file
-  --lr LR               Learning rate
-  --iters ITERS         Number of refinement iterations
 ```
-- `--weight`: Path to model weights.
+- `--weights`: Path to model weights.
 - The directory of images you want to infer must have below structure. Each images must have format `{ID}_{side}.png`.
 - You can render the results directly use `--render`.
 - There are 2 formats to save results:
   - image: Each frame & result will be saved as a png file.
   - video: All frames & results will be saved as a video.
-- `--model_config`, `--model_name` and `--iters` are the argument that you use in your training. For inference, `--lr` is not necessasry.
 ```
 .
 ├── image_left
@@ -116,9 +115,17 @@ LitDisparityModule:
 - `ResNet50` & `RepViT` are used as backbone.
 
   ## Training command
-  ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py  --model_config nndepth/disparity/models/configs/Coarse2FineGroupRepViTRAFTStereo.json --iters 2 --batch_size 4 --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 250000 --HW 448 640 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save --num_workers 8
-  ```
+```bash
+python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/configs/models/BaseRAFTStereo.yml --data_config nndepth/disparity/configs/data/BaseRAFTStereo_Tartanair2DisparityModel.yml --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 100000 --expe_name baseline --log --save
+```
+
+  ## Inference command
+- Download checkpoint trained on TartanAir [here](https://drive.google.com/drive/folders/1OZIqRjqlF2fD4wwbMsFf5Lxx7ovYdu1D)
+
+```bash
+python nndepth/disparity/scripts/inference.py --model_config_file nndepth/disparity/configs/models/BaseRAFTStereo.yml --weights  disparity-BaseRAFTStereo-baseline.ckpt --left_path samples/stereo/left/ --right_path samp
+les/stereo/right/ --HW 480 640  --output test --save_format image
+```
 
 </details>
 
@@ -134,9 +141,15 @@ LitDisparityModule:
 - `ResNet50` is used as backbone.
 
   ## Training command
-  ```bash
-  python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/models/configs/CREStereo.json --iters 4 --batch_size 4 --accumulate_grad_batches 2 --lr 5e-5 --limit_val_batches 200 --max_step 150000 --HW 384 480 --train_envs abandonedfactory amusement carwelding endofworld gascola hospital japanesealley neighborhood ocean office office2 oldtown seasidetown seasonsforest seasonsforest_winter soulcity westerndesert --val_envs abandonedfactory_night --expe_name baseline --log --save
-  ```
+```bash
+python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/configs/models/CREStereoBase.yml --data_config nndepth/disparity/configs/data/CREStereoBase_Tartanair2DisparityModel.yml --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 100000 --expe_name baseline --log --save
+```
+
+  ## Inference command
+- Download checkpoint trained on TartanAir [here](https://drive.google.com/drive/folders/1fTlVDc3NHCeiFTfOKZ_keQGlkmrgJPYG)
+```bash
+python nndepth/disparity/scripts/inference.py --model_config_file nndepth/disparity/configs/models/CREStereoBase.yml --weights disparity-CREStereoBase-baseline.ckpt --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+```
 </details>
 
 <details>
@@ -154,4 +167,5 @@ LitDisparityModule:
 ```bash
 python nndepth/disparity/scripts/train_disparity_on_tartanair.py --model_config nndepth/disparity/configs/models/CREStereoBase.yml --data_config nndepth/disparity/configs/data/CREStereoBase_Tartanair2DisparityModel.yml --accumulate_grad_batches 2 --lr 2e-4 --limit_val_batches 200 --val_check_interval 5000 --max_step 100000 --expe_name baseline --log --save
 ```
+
 </details>

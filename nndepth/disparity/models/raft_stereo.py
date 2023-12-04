@@ -13,6 +13,7 @@ from nndepth.disparity.models.cost_volume.raft_stereo import (
     CorrBlock1D,
     GroupCorrBlock1D,
 )
+from nndepth.utils.common import load_weights
 
 
 class RAFTStereo(nn.Module):
@@ -28,6 +29,8 @@ class RAFTStereo(nn.Module):
         corr_radius: int = 4,
         tracing: bool = False,
         include_preprocessing: bool = False,
+        weights: str = None,
+        strict_load: bool = True,
         **kwargs
     ):
         """Initialize the RAFTStereo model.
@@ -59,6 +62,11 @@ class RAFTStereo(nn.Module):
         # onnx exportation argument
         self.tracing = tracing
         self.include_preprocessing = include_preprocessing
+        # load weights
+        self.weights = weights
+        self.strict_load = strict_load
+        if weights is not None:
+            load_weights(self, weights=weights, strict_load=strict_load)
 
     def _init_fnet(self):
         raise NotImplementedError("Must be implemented in child class")
@@ -196,7 +204,7 @@ class BaseRAFTStereo(RAFTStereo):
 
 
 class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
-    def __init__(self, num_groups: int = 4, **kwargs):
+    def __init__(self, num_groups: int = 4, weights: str = None, strict_load: bool = True, **kwargs):
         self.num_groups = num_groups
         super().__init__(**kwargs)
         assert self.corr_levels == 1, "Corr level must be 1 in Coarse2FineGroupRepViTRaftStereo"
@@ -214,6 +222,10 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
                 FeatureFusionBlock(64, 16, 64, 1, 0),
             ]
         )
+        self.weights = weights
+        self.strict_load = strict_load
+        if self.weights is not None:
+            load_weights(self, weights=self.weights, strict_load=self.strict_load)
 
     def _init_fnet(self, **kwargs):
         return RepViT(**kwargs)
