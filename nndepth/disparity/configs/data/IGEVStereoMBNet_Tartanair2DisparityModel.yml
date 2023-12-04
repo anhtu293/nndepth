@@ -1,4 +1,4 @@
-batch_size: 4
+batch_size: 2
 num_workers: 8
 sequential: false
 HW: [480, 640]

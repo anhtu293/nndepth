@@ -11,6 +11,7 @@ from nndepth.disparity.models.cost_volume.igev import (
     GeometryAwareCostVolume,
     CostVolumeFilterNetwork,
 )
+from nndepth.utils.common import load_weights
 
 
 class IGEVStereoBase(nn.Module):
@@ -29,6 +30,8 @@ class IGEVStereoBase(nn.Module):
         corr_radius: int = 4,
         tracing: bool = False,
         include_preprocessing: bool = False,
+        weights: str = None,
+        strict_load: bool = True,
     ):
         """
         Initialize the IGEVStereoBase model.
@@ -54,6 +57,7 @@ class IGEVStereoBase(nn.Module):
 
         self.update_block = self.SUPPORTED_UPDATE_CLS[update_cls](
             hidden_dim=self.hidden_dim,
+            context_dim=self.context_dim,
             flow_channel=1,
             cor_planes=corr_levels * (corr_radius * 2 + 1) * self.cv_groups * 2,
             spatial_scale=4,
@@ -65,6 +69,9 @@ class IGEVStereoBase(nn.Module):
         # onnx exportation argument
         self.tracing = tracing
         self.include_preprocessing = include_preprocessing
+
+        self.weights = weights
+        self.strict_load = strict_load
 
     def _init_fnet(self):
         raise NotImplementedError("Must be implemented in child class")
@@ -209,6 +216,8 @@ class IGEVStereoMBNet(IGEVStereoBase):
             nn.Conv2d(24, self.context_dim * 2, 3, 1, 1),
             nn.ReLU(False),
         )
+        if self.weights is not None:
+            load_weights(self, weights=self.weights, strict_load=self.strict_load)
 
     def _init_fnet(self):
         return MobilenetV3LargeEncoder(pretrained=True, feature_hooks=[1, 2, 3, 4, 5])
