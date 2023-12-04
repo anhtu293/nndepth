@@ -57,6 +57,7 @@ class IGEVStereoBase(nn.Module):
 
         self.update_block = self.SUPPORTED_UPDATE_CLS[update_cls](
             hidden_dim=self.hidden_dim,
+            context_dim=self.context_dim,
             flow_channel=1,
             cor_planes=corr_levels * (corr_radius * 2 + 1) * self.cv_groups * 2,
             spatial_scale=4,
