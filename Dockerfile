@@ -4,3 +4,5 @@ RUN apt-get install -y libglib2.0-0 python3-tk libqt5gui5
 
 COPY requirements.txt /install/requirements.txt
 RUN pip install -r /install/requirements.txt
+
+ENV PYTHONPATH=/home/aloception/nndepth:/home/aloception/nndepth/aloception-oss
