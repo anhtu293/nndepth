@@ -74,30 +74,6 @@ class RAFTStereo(nn.Module):
     def _init_update_block(self):
         raise NotImplementedError("Must be implemented in child class")
 
-    def _preprocess_input(self, frame1: aloscene.Frame, frame2: aloscene.Frame):
-        if self.tracing:
-            assert isinstance(frame1, torch.Tensor)
-            assert isinstance(frame2, torch.Tensor)
-            if self.include_preprocessing:
-                assert (frame1.ndim == 3) and (frame2.ndim == 3)
-                frame1 = frame1.permute(2, 0, 1)
-                frame2 = frame2.permute(2, 0, 1)
-
-                frame1 = frame1.unsqueeze(0)
-                frame2 = frame2.unsqueeze(0)
-
-                frame1 = frame1 / 255 * 2 - 1
-                frame2 = frame2 / 255 * 2 - 1
-
-            assert (frame1.ndim == 4) and (frame2.ndim == 4)
-        else:
-            for frame in [frame1, frame2]:
-                assert frame.normalization == "minmax_sym"
-                assert frame.names == ("B", "C", "H", "W")
-            frame1 = frame1.as_tensor()
-            frame2 = frame2.as_tensor()
-        return frame1, frame2
-
     def freeze_bn(self):
         for m in self.modules():
             if isinstance(m, nn.BatchNorm2d):
@@ -149,9 +125,7 @@ class RAFTStereo(nn.Module):
         """Forward in backbone. This method must return fmap1, fmap2, cnet1 and guide_features"""
         raise NotImplementedError("Must be implemented in child class")
 
-    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, **kwargs):
-        frame1, frame2 = self._preprocess_input(frame1, frame2)
-
+    def forward(self, frame1: torch.Tensor, frame2: torch.Tensor, **kwargs):
         # forward backbone. This method must return fmap1, fmap2, cnet
         fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
         fnet_ds = frame1.shape[-1] // fmap1.shape[-1]
@@ -255,9 +229,8 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
         up_disp = up_disp.permute(0, 1, 4, 2, 5, 3)
         return up_disp.reshape(N, 1, rate[0] * H, rate[1] * W)
 
-    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, **kwargs):
+    def forward(self, frame1: torch.Tensor, frame2: torch.Tensor, **kwargs):
         B = frame1.shape[0]
-        frame1, frame2 = self._preprocess_input(frame1, frame2)
 
         features = self.fnet(torch.cat([frame1, frame2], axis=0))[::2]
         features = features[::-1]

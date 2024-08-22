@@ -1,17 +1,18 @@
 import argparse
 
-import alonet
-
+from nndepth.utils.common import add_common_args, instantiate_with_config_file
 from nndepth.disparity.train import LitDisparityModel
-from nndepth.disparity.data_modules.tartanair2disparity import Tartanair2DisparityModel
+from nndepth.disparity.data_loaders.tartanair2disparity import TartanairDisparityDataLoader
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser = alonet.common.pl_helpers.add_argparse_args(parser, add_pl_args=True, mode="training")
-    parser = Tartanair2DisparityModel.add_argparse_args(parser)
-    parser = LitDisparityModel.add_argparse_args(parser)
+    parser = add_common_args(parser)
     args = parser.parse_args()
+
+    model = instantiate_with_config_file(args.model_config, "nndepth.disparity.models")
+    dataloader = instantiate_with_config_file(args.data_config, "nndepth.disparity.data_loaders")
+    trainer = instantiate_with_config_file(args.training_config, "nndepth.disparity.trainers")
 
     lit = LitDisparityModel(args=args)
     tartan_loader = Tartanair2DisparityModel(args=args)

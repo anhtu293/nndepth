@@ -104,30 +104,6 @@ class CREStereoBase(nn.Module):
         if weights is not None:
             load_weights(self, weights=weights, strict_load=strict_load)
 
-    def _preprocess_input(self, frame1: aloscene.Frame, frame2: aloscene.Frame):
-        if self.tracing:
-            assert isinstance(frame1, torch.Tensor)
-            assert isinstance(frame2, torch.Tensor)
-            if self.include_preprocessing:
-                assert (frame1.ndim == 3) and (frame2.ndim == 3)
-                frame1 = frame1.permute(2, 0, 1)
-                frame2 = frame2.permute(2, 0, 1)
-
-                frame1 = frame1.unsqueeze(0)
-                frame2 = frame2.unsqueeze(0)
-
-                frame1 = frame1 / 255 * 2 - 1
-                frame2 = frame2 / 255 * 2 - 1
-
-            assert (frame1.ndim == 4) and (frame2.ndim == 4)
-        else:
-            for frame in [frame1, frame2]:
-                assert frame.normalization == "minmax_sym"
-                assert frame.names == ("B", "C", "H", "W")
-            frame1 = frame1.as_tensor()
-            frame2 = frame2.as_tensor()
-        return frame1, frame2
-
     def freeze_bn(self):
         for m in self.modules():
             if isinstance(m, nn.BatchNorm2d):
@@ -171,27 +147,21 @@ class CREStereoBase(nn.Module):
 
     def forward(
         self,
-        frame1: aloscene.Frame,
-        frame2: aloscene.Frame,
+        frame1: torch.Tensor,
+        frame2: torch.Tensor,
         flow_init=None,
         upsample=True,
         test_mode=False,
         **kwargs,
     ):
         """Estimate optical flow between pair of frames"""
-
-        # image1 = 2 * (image1 / 255.0) - 1.0
-        # image2 = 2 * (image2 / 255.0) - 1.0
-
-        image1, image2 = self._preprocess_input(frame1, frame2)
-
-        image1 = image1.contiguous()
-        image2 = image2.contiguous()
+        frame1 = frame1.contiguous()
+        frame2 = frame2.contiguous()
 
         hdim = self.hidden_dim
 
         # run the feature network
-        fmap1, fmap2 = self.fnet([image1, image2])
+        fmap1, fmap2 = self.fnet([frame1, frame2])
 
         fmap1 = fmap1.float()
         fmap2 = fmap2.float()
@@ -225,7 +195,7 @@ class CREStereoBase(nn.Module):
 
         # positional encoding and self-attention
         pos_encoding_fn_small = PositionEncodingSine(
-            d_model=256, max_shape=(image1.shape[2] // (self.fnet_ds * 4), image1.shape[3] // (self.fnet_ds * 4))
+            d_model=256, max_shape=(frame1.shape[2] // (self.fnet_ds * 4), frame1.shape[3] // (self.fnet_ds * 4))
         )
 
         # 'n c h w -> n (h w) c'
@@ -238,7 +208,7 @@ class CREStereoBase(nn.Module):
 
         fmap1_dw16, fmap2_dw16 = self.self_att_fn(fmap1_dw16, fmap2_dw16)
         fmap1_dw16, fmap2_dw16 = [
-            x.reshape(x.shape[0], image1.shape[2] // (self.fnet_ds * 4), -1, x.shape[2]).permute(0, 3, 1, 2)
+            x.reshape(x.shape[0], frame1.shape[2] // (self.fnet_ds * 4), -1, x.shape[2]).permute(0, 3, 1, 2)
             for x in [fmap1_dw16, fmap2_dw16]
         ]
 
