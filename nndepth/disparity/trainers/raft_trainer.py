@@ -24,7 +24,7 @@ class RAFTTrainer(BaseTrainer):
         max_steps: Optional[int] = 100000,
         weight_decay: float = 0.0001,
         epsilon: float = 1e-8,
-        gradient_accumulation_steps: Optional[int] = None,
+        gradient_accumulation_steps: Optional[int] = 1,
         **kwargs,
     ):
         """
@@ -57,7 +57,7 @@ class RAFTTrainer(BaseTrainer):
         self.is_prepared = False
 
     def predict_and_get_visualization(
-        model: nn.Module, sample: Dict[str, aloscene.Frame]
+        self, model: nn.Module, sample: Dict[str, aloscene.Frame]
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Get visualization of 1 example for debugging purposes
@@ -77,7 +77,7 @@ class RAFTTrainer(BaseTrainer):
             disp_image = (disp_image * 255).astype(np.uint8)
             return disp_image
 
-        left_frame, right_frame = sample["left"][:1], sample["right"][:0]
+        left_frame, right_frame = sample["left"], sample["right"]
         left_tensor, right_tensor = left_frame.as_tensor(), right_frame.as_tensor()
         m_outputs = model(left_tensor, right_tensor)
         disp_pred = m_outputs[-1]["up_disp"][0]
@@ -85,7 +85,8 @@ class RAFTTrainer(BaseTrainer):
 
         left_image = left_frame.norm255().as_tensor().cpu().numpy().squeeze().transpose(1, 2, 0).astype(np.uint8)
         disp_gt = left_frame.disparity[0]
-        disp_gt = disp_gt.resize(disp_pred.shape[1:], mode="nearest")
+        disp_gt.names = ("C", "H", "W")  # Set names to avoid error in resize
+        disp_gt = disp_gt.resize(disp_pred.shape[-2:], mode="nearest")
         min_disp, max_disp = disp_gt.min(), disp_gt.max()
 
         disp_gt_image = get_disp_image(disp_gt, min_disp, max_disp)
@@ -110,7 +111,7 @@ class RAFTTrainer(BaseTrainer):
         )
         self.is_prepared = True
         logger.info("Finish accelerator preparation")
-        return model, optimizer, scheduler, train_dataloader, val_dataloader
+        return model, train_dataloader, val_dataloader, optimizer, scheduler
 
     def resume_from_checkpoint(self, dir_path: str):
         """
@@ -257,12 +258,12 @@ class RAFTTrainer(BaseTrainer):
                             self.accelerator.save_state(os.path.join(self.artifact_dir, topk_cp_dir))
                             # Remove old checkpoint
                             if old_topk_cp:
-                                os.remove(os.path.join(self.artifact_dir, old_topk_cp))
+                                os.rmdir(os.path.join(self.artifact_dir, old_topk_cp))
 
                         # Remove old checkpoint & Save latest checkpoint
                         old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
                         if old_latest_cp_dir:
-                            os.remove(old_latest_cp_dir)
+                            os.rmdir(os.path.join(self.artifact_dir, old_latest_cp_dir))
                         latest_cp_dir = self.get_latest_checkpoint_name(self.total_steps)
                         self.accelerator.save_state(os.path.join(self.artifact_dir, latest_cp_dir))
 
@@ -289,7 +290,9 @@ class RAFTTrainer(BaseTrainer):
         percent_3 = []
         percent_5 = []
 
-        for batch in tqdm(dataloader, desc="Evaluating"):
+        for i_batch, batch in enumerate(tqdm(dataloader, desc="Evaluating")):
+            if self.num_val_samples != -1 and i_batch >= self.num_val_samples:
+                break
             left_frame, right_frame = batch["left"], batch["right"]
             left_frame, right_frame = left_frame.as_tensor(), right_frame.as_tensor()
 
@@ -311,6 +314,6 @@ class RAFTTrainer(BaseTrainer):
             "epe": np.mean(epe),
             "percent_0_5px": np.mean(percent_0_5),
             "percent_1px": np.mean(percent_1),
-            "percent_2px": np.mean(percent_3),
+            "percent_3px": np.mean(percent_3),
             "percent_5px": np.mean(percent_5),
         }

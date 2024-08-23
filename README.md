@@ -37,7 +37,7 @@ The easiest way to set up the working environment is by using Docker. Follow the
 
 2. Launch the Docker container:
    ```bash
-   docker run --gpus all --ipc host -e LOCAL_USER_ID=$(id -u) -it --rm -v /PATH/TO/YOUR/DATASET:/data -v /PATH/TO/NNDEPTH:/home/aloception/nndepth --privileged -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix nndepth
+   docker run --gpus all --ipc host -e LOCAL_USER_ID=$(id -u) -it --rm -v /PATH/TO/YOUR/DATASET:/data -v /PATH/TO/NNDEPTH:/home/aloception/nndepth  -v /home/YOUR_HOME/.config/:/home/aloception/.config -v /home/YOUR_HOME/.netrc:/home/aloception/.netrc --privileged -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix nndepth
    ```
 
    Replace `/PATH/TO/NNDEPTH` with the actual path to your nndepth directory.
@@ -48,6 +48,7 @@ The easiest way to set up the working environment is by using Docker. Follow the
    cd /home/aloception/nndepth && pip install -e aloception-oss
    ```
 
+   `-v /home/YOUR_HOME/.config/:/home/aloception/.config -v /home/YOUR_HOME/.netrc:/home/aloception/.netrc` is useful if you want to track your training with **wandb**: these are necessary files which store the API key for **wandb**.
 
 This setup ensures that you have all the necessary dependencies and a consistent environment for development and experimentation.
 

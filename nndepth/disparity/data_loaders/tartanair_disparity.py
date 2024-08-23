@@ -14,6 +14,7 @@ class TartanairDisparityDataLoader(BaseDataLoader):
         HW: Tuple[int, int] = [384, 496],
         train_envs: List[str] = ["abandonedfactory"],
         val_envs: List[str] = ["abandonedfactory_night"],
+        **kwargs,
     ):
         """
         DataLoader for training disparity on Tartanair dataset
@@ -26,7 +27,7 @@ class TartanairDisparityDataLoader(BaseDataLoader):
             train_envs (List[str]): list of training environments
             val_envs (List[str]): list of validation environments
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.dataset_dir = dataset_dir
         self.HW = HW
         self.train_envs = train_envs

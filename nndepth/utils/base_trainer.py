@@ -9,8 +9,9 @@ class BaseTrainer(object):
         workdir: str,
         project_name: str,
         experiment_name: str,
-        val_interval: Union[float, int] = 1,
+        val_interval: Union[float, int] = 1.0,
         log_interval: int = 100,
+        num_val_samples: int = -1,
         save_best_k_cp: int = 3,
     ):
         """
@@ -22,6 +23,8 @@ class BaseTrainer(object):
             experiment_name (str): name of the experiment
             val_interval (Union[float, int]): interval to validate
             log_interval (int): interval to log
+            num_val_samples (int): number of samples during evaluation.
+                Useful to limit the number of samples during evaluation. Defaults to -1 (all samples)
             save_best_k_cp (int): number of best checkpoints to save
         """
         assert isinstance(val_interval, int) or (
@@ -38,6 +41,7 @@ class BaseTrainer(object):
         self.artifact_dir = os.path.join(self.workdir, self.project_name, self.experiment_name)
         self.val_interval = val_interval
         self.log_interval = log_interval
+        self.num_val_samples = num_val_samples
         self.save_best_k_cp = save_best_k_cp
         self.checkpoint_infos = []
         self.total_steps = 0

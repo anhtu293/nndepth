@@ -18,6 +18,9 @@ def main():
     dataloader, data_config = instantiate_with_config_file(args.data_config, "nndepth.disparity.data_loaders")
     trainer, training_config = instantiate_with_config_file(args.training_config, "nndepth.disparity.trainers")
 
+    # Init data loader
+    dataloader.setup()
+
     # Init the criterion, optimizer, scheduler
     criterion = RAFTCriterion(gamma=0.8, max_flow=1000)
     optimizer = optim.AdamW(model.parameters(), lr=trainer.lr, weight_decay=trainer.weight_decay, eps=trainer.epsilon)
@@ -41,7 +44,9 @@ def main():
     )
 
     # Prepare the trainer
-    trainer.prepare(model, dataloader.train_dataloader, dataloader.val_dataloader, optimizer, scheduler)
+    model, dataloader.train_dataloader, dataloader.val_dataloader, optimizer, scheduler = trainer.prepare(
+        model, dataloader.train_dataloader, dataloader.val_dataloader, optimizer, scheduler
+    )
 
     # Resume from checkpoint if required
     if args.resume_from_checkpoint is not None:

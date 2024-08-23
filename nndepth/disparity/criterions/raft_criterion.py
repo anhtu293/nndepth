@@ -12,7 +12,7 @@ class RAFTCriterion:
         self.gamma = gamma
         self.max_flow = max_flow
 
-    def __call__(self, m_outputs: List[Dict[str, torch.Tensor]], disp_gt: torch.Tensor):
+    def __call__(self, disp_gt: torch.Tensor, m_outputs: List[Dict[str, torch.Tensor]]):
         """Loss function defined over sequence of flow predictions"""
         n_predictions = len(m_outputs)
         disp_loss = 0.0
@@ -20,7 +20,6 @@ class RAFTCriterion:
         for i in range(n_predictions):
             m_dict = m_outputs[i]
             i_weight = self.gamma ** (n_predictions - i - 1)
-
             if m_dict["up_disp"].shape[-2:] != disp_gt.shape[-2:]:
                 scale = disp_gt.shape[-1] // m_dict["up_disp"].shape[-1]
                 gt = -F.max_pool2d(-disp_gt, kernel_size=scale) / scale

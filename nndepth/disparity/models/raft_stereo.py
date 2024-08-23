@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Union, Tuple
+from typing import Dict, Union, Tuple, List
 
 import aloscene
 
@@ -159,6 +159,9 @@ class RAFTStereo(nn.Module):
 class BaseRAFTStereo(RAFTStereo):
     """Original RAFT Stereo presented in the paper"""
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def _init_fnet(self):
         return BasicEncoder(output_dim=self.fnet_dim)
 
@@ -178,8 +181,53 @@ class BaseRAFTStereo(RAFTStereo):
 
 
 class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
-    def __init__(self, num_groups: int = 4, weights: str = None, strict_load: bool = True, **kwargs):
+    def __init__(
+        self,
+        num_groups: int = 4,
+        downsample_ratios: List[Tuple[int, int]] = [[2, 2], [2, 2], [2, 2], [2, 2]],
+        ffn_exp_ratios: List[float] = [1.0, 3.0, 3.0, 4.0],
+        num_blocks_per_stage: List[int] = [4, 4, 6, 2],
+        patch_size: int = 7,
+        stem_strides: List[int] = [[2, 2], [2, 2], [1, 1]],
+        token_mixer_types: List[str] = ["repmixer", "repmixer", "repmixer", "attention"],
+        use_ffn_per_stage: List[bool] = [False, True, True, True],
+        width_multipliers: List[float] = [1.0, 1.0, 1.0, 1.0],
+        weights: str = None,
+        strict_load: bool = True,
+        **kwargs
+    ):
+        """
+        Coarse2FineGroupRepViTRAFTStereo
+
+        Args:
+            num_groups (int): Number of groups. Default is 4.
+            downsample_ratios (List[Tuple[int, int]]): Downsample ratios. Default is [[2, 2], [2, 2], [2, 2], [2, 2]].
+            ffn_exp_ratios (List[float]): Feed-forward expansion ratios. Default is [1.0, 3.0, 3.0, 4.0].
+            num_blocks_per_stage (List[int]): Number of blocks per stage. Default is [4, 4, 6, 2].
+            patch_size (int): Patch size. Default is 7.
+            stem_strides (List[int]): Stem strides. Default is [[2, 2], [2, 2], [1, 1]].
+            token_mixer_types (List[str]): Token mixer types.
+                Default is ["repmixer", "repmixer", "repmixer", "attention"].
+            use_ffn_per_stage (List[bool]): Use feed-forward network per stage. Default is [False, True, True, True].
+            width_multipliers (List[float]): Width multipliers. Default is [1.0, 1.0, 1.0, 1.0].
+            weights (str): Weights. Default is None.
+            strict_load (bool): Strict load. Default is True.
+            **kwargs: Additional keyword arguments.
+
+            For `num_groups`, `downsample_ratios`, `ffn_exp_ratios`, `num_blocks_per_stage`, `stem_strides`,
+                `token_mixer_types`, `use_ffn_per_stage`, `width_multipliers`,
+                Please refer to `nndepth.extractors.rep_vit.RepViT` for detail implementation.
+        """
         self.num_groups = num_groups
+        self.downsample_ratios = downsample_ratios
+        self.ffn_exp_ratios = ffn_exp_ratios
+        self.num_blocks_per_stage = num_blocks_per_stage
+        self.patch_size = patch_size
+        self.stem_strides = stem_strides
+        self.token_mixer_types = token_mixer_types
+        self.use_ffn_per_stage = use_ffn_per_stage
+        self.width_multipliers = width_multipliers
+
         super().__init__(**kwargs)
         assert self.corr_levels == 1, "Corr level must be 1 in Coarse2FineGroupRepViTRaftStereo"
         self.corr_fn = GroupCorrBlock1D
@@ -202,7 +250,16 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
             load_weights(self, weights=self.weights, strict_load=self.strict_load)
 
     def _init_fnet(self, **kwargs):
-        return RepViT(**kwargs)
+        return RepViT(
+            downsample_ratios=self.downsample_ratios,
+            ffn_exp_ratios=self.ffn_exp_ratios,
+            num_blocks_per_stage=self.num_blocks_per_stage,
+            patch_size=self.patch_size,
+            stem_strides=self.stem_strides,
+            token_mixer_types=self.token_mixer_types,
+            use_ffn_per_stage=self.use_ffn_per_stage,
+            width_multipliers=self.width_multipliers,
+        )
 
     def _init_update_block(self):
         return BasicUpdateBlock(
