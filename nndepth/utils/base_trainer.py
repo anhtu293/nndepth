@@ -1,6 +1,5 @@
 import os
-import datetime
-from typing import Union
+from typing import Union, Optional, Tuple
 from loguru import logger
 
 
@@ -29,11 +28,14 @@ class BaseTrainer(object):
             isinstance(val_interval, float) and val_interval <= 1
         ), "val_interval must be either int or float <= 1"
         assert log_interval > 0, "log_interval must be greater than 0"
-        assert save_best_k_cp > 0, "save_best_k_cp must be greater than 0"
+        assert (
+            save_best_k_cp == -1 or save_best_k_cp > 0
+        ), "save_best_k_cp must be -1 (save all checkpoints) or greater than 0"
 
         self.workdir = workdir
         self.project_name = project_name
-        self.experiment_name = "{}_{:%B-%d-%Y-%Hh-%M}".format(experiment_name, datetime.datetime.now())
+        self.experiment_name = experiment_name
+        self.artifact_dir = os.path.join(self.workdir, self.project_name, self.experiment_name)
         self.val_interval = val_interval
         self.log_interval = log_interval
         self.save_best_k_cp = save_best_k_cp
@@ -48,9 +50,16 @@ class BaseTrainer(object):
         """
         os.makedirs(self.workdir, exist_ok=True)
         os.makedirs(os.path.join(self.workdir, self.project_name), exist_ok=True)
-        os.makedirs(os.path.join(self.workdir, self.experiment_name), exist_ok=True)
+        if os.path.exists(os.path.join(self.workdir, self.project_name, self.experiment_name)):
+            logger.warning(
+                f"Experiment {os.path.join(self.workdir, self.project_name, self.experiment_name)} already exists!."
+            )
+            logger.warning(
+                "You may overwrite the existing experiment. Ignore this message if you are resuming the run."
+            )
+        os.makedirs(os.path.join(self.workdir, self.project_name, self.experiment_name), exist_ok=True)
 
-    def get_checkpoint_name(self, epoch: int, steps: int, metric: float, metric_name: str) -> str:
+    def get_topk_checkpoint_name(self, epoch: int, steps: int, metric: float, metric_name: str) -> str:
         """
         Get the name of the checkpoint
 
@@ -64,8 +73,20 @@ class BaseTrainer(object):
         """
         return f"epoch-{epoch}_steps-{steps}_{metric_name}-{metric:.4f}.pth"
 
+    def get_latest_checkpoint_name(self, steps: int) -> str:
+        """
+        Get the name of the latest checkpoint
+
+        Args:
+            steps (int): step number
+
+        Returns:
+            str: checkpoint name
+        """
+        return f"latest_steps-{steps}.pth"
+
     @staticmethod
-    def get_last_checkpoint_from_dir(dir_path: str):
+    def get_latest_checkpoint_from_dir(dir_path: str):
         """
         Get the last checkpoint from the directory
 
@@ -75,38 +96,124 @@ class BaseTrainer(object):
         Returns:
             str: path to the last checkpoint
         """
+        assert os.path.isdir(dir_path), f"{dir_path} is not a directory"
+
         checkpoints = [f for f in os.listdir(dir_path) if f.endswith(".pth")]
+        for cp in checkpoints:
+            if "latest" in cp:
+                return cp
+        logger.info("No latest checkpoint found. Latest checkpoint must have the format `latest_steps-<steps>.pth`")
+        return None
+
+    @staticmethod
+    def get_best_checkpoint_from_dir(dir_path: str, condition: str = "max"):
+        """
+        Get the best checkpoint from the directory
+
+        Args:
+            dir_path (str): path to the directory
+            condition (str): condition to select the best checkpoint. `max` or `min`. Defaults to `max`
+
+        Returns:
+            str: path to the best checkpoint
+        """
+        assert condition in ["max", "min"], "condition must be either `max` or `min`"
+        assert os.path.isdir(dir_path), f"{dir_path} is not a directory"
+
+        checkpoints = [f for f in os.listdir(dir_path) if f.endswith(".pth") and "latest" not in f]
         if not checkpoints:
             return None
-        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("_")[1].split("-")[1]))
-        return os.path.join(dir_path, checkpoints[-1])
+        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("_")[-1]))
+        if condition == "max":
+            return checkpoints[-1]
+        else:
+            return checkpoints[0]
 
-    def load_state(self, dir_path: str):
+    def load_state(self, cp_path: str):
         """
         Load state of Trainer
 
         Args:
             dir_path (str): path to the directory
         """
-        if dir_path.endswith(".pth"):
-            dir_path = dir_path.replace(os.path.basename(dir_path), "")
+        assert os.path.exists(cp_path) and cp_path.endswith(".pth"), f"{cp_path} must be a `.pth` file"
+
         checkpoint_infos = []
-        latest = 0
-        for f in os.listdir(dir_path):
-            if f.endswith(".pth"):
-                epoch = int(f.split("_")[0].split("-")[1])
-                steps = int(f.split("_")[1].split("-")[1])
-                if steps > latest:
-                    latest = steps
-                metric = float(f.split("_")[2].split("-")[1].split(".")[0])
-                checkpoint_infos.append({"epoch": epoch, "step": steps, "metric": metric})
+        file_name = os.path.basename(cp_path)
+        dir_path = os.path.dirname(cp_path)
+        if "latest" in file_name:
+            # Load from latest checkpoint
+            self.total_steps = int(file_name.split("-")[1].split(".")[0])
+            for f in os.listdir(dir_path):
+                if f.endswith(".pth") and "latest" not in f:
+                    epoch = int(f.split("_")[0].split("-")[1])
+                    steps = int(f.split("_")[1].split("-")[1])
+                    metric = float(f.split("_")[2].split("-")[1].split(".")[0])
+                    checkpoint_infos.append({"epoch": epoch, "step": steps, "metric": metric})
+        else:
+            logger.info("Not loading from latest checkpoint but from a specific checkpoint.")
+            # Load from a specific checkpoint
+            self.total_steps = int(file_name.split("_")[1].split("-")[1])
+            for f in os.listdir(dir_path):
+                if f.endswith(".pth") and "latest" not in f:
+                    steps = int(f.split("_")[1].split("-")[1])
+                    if steps > self.total_steps:
+                        continue
+                    epoch = int(f.split("_")[0].split("-")[1])
+                    metric = float(f.split("_")[2].split("-")[1].split(".")[0])
+                    checkpoint_infos.append({"epoch": epoch, "step": steps, "metric": metric})
+
         checkpoint_infos = sorted(checkpoint_infos, key=lambda x: x["metric"], reverse=True)
         self.checkpoint_infos = checkpoint_infos
-        self.total_steps = latest
-        logger.info("Trainer's state loaded!")
+        logger.info(f"State of Trainer loaded from : {cp_path}")
+        logger.info(f"Total steps: {self.total_steps}")
+        logger.info(f"Checkpoint infos: {self.checkpoint_infos}")
+
+    def is_topk_checkpoint(
+        self, epoch: int, steps: int, metric: float, metric_name: str
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Save checkpoint
+
+        Args:
+            epoch (int): epoch number
+            steps (int): step number
+            metric (float): metric value
+            metric_name (str): name of the metric
+
+        Returns:
+            Tuple[Optional[str], Optional[str]]: new checkpoint path, replaced checkpoint path
+        """
+        new_cp_dir = None  # Path to save the new checkpoint
+        replaced_cp_dir = None  # This will be useful to remove the old checkpoint
+
+        if self.save_best_k_cp == -1 or len(self.checkpoint_infos) < self.save_best_k_cp:
+            self.checkpoint_infos.append(
+                {"epoch": epoch, "steps": steps, "metric": metric, "metric_name": metric_name}
+            )
+            self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"], reverse=True)
+            new_cp_dir = self.get_topk_checkpoint_name(epoch, steps, metric, metric_name)
+
+        elif metric > self.checkpoint_infos[-1]["metric"]:
+            replaced_cp = self.checkpoint_infos.pop(-1)
+            self.checkpoint_infos.append(
+                {
+                    "epoch": epoch,
+                    "steps": self.total_steps,
+                    "metric": metric,
+                    "metric_name": metric_name,
+                }
+            )
+            self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"], reverse=True)
+            new_cp_dir = self.get_topk_checkpoint_name(epoch, self.total_steps, metric, metric_name)
+            replaced_cp_dir = self.get_topk_checkpoint_name(
+                replaced_cp["epoch"], replaced_cp["steps"], replaced_cp["metric"], replaced_cp["metric_name"]
+            )
+
+        return new_cp_dir, replaced_cp_dir
 
     def train(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in child class.")
 
-    def validate(self, *args, **kwargs):
+    def evaluate(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in child class.")

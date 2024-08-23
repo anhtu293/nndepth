@@ -1,18 +1,18 @@
-import os
 from argparse import ArgumentParser
-import shutil
 import torch
-import pytorch_lightning as pl
-from pytorch_lightning import LightningModule, Trainer
 import yaml
 import importlib
-from typing import Tuple
+from typing import Tuple, Union
+
+from nndepth.utils.base_trainer import BaseTrainer
+from nndepth.utils.base_dataloader import BaseDataLoader
 
 
 def add_common_args(parser: ArgumentParser) -> ArgumentParser:
     parser.add_argument("--model_config", required=True, help="Path to model config file")
     parser.add_argument("--data_config", required=True, help="Path to data config file")
     parser.add_argument("--training_config", required=True, help="Path to training config file")
+    parser.add_argument("--resume_from_checkpoint", default=None, help="Path to checkpoint to resume.")
     return parser
 
 
@@ -32,7 +32,7 @@ def load_weights(model: torch.nn.Module, weights: str, strict_load: bool = True,
 
 def instantiate_with_config_file(
     config_file: str, module_path: str, cls_name: str = None
-) -> Tuple[torch.nn.Module, dict]:
+) -> Tuple[Union[torch.nn.Module, BaseTrainer, BaseDataLoader], dict]:
     """
     Instantiate an object from the config file.
 
@@ -58,20 +58,3 @@ def instantiate_with_config_file(
         raise RuntimeError(f"Class {cls_name} not found in module {module_path}.")
 
     return cls_type(**config), config
-
-
-class ConfigRegisterCallback(pl.Callback):
-    def __init__(self):
-        super().__init__()
-
-    def on_train_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
-        log_dir = trainer.logger.save_dir
-
-        # Copy config file to log dir
-        model_file_name = pl_module.args.model_config.split("/")[-1]
-        if pl_module.args.model_config != os.path.join(log_dir, model_file_name):
-            shutil.copyfile(pl_module.args.model_config, os.path.join(log_dir, model_file_name))
-        if pl_module.args.data_config != os.path.join(log_dir, "data_config.yaml"):
-            shutil.copyfile(pl_module.args.data_config, os.path.join(log_dir, "data_config.yaml"))
-
-        print(f"Copied config files to {log_dir} !")

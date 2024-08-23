@@ -1,3 +1,5 @@
+import os
+import torch
 import torch.nn as nn
 import numpy as np
 from torch.utils.data import DataLoader
@@ -5,7 +7,10 @@ import torch.optim as optim
 from accelerate import Accelerator
 from loguru import logger
 from tqdm import tqdm
-from typing import Optional, Tuple
+import wandb
+from typing import Optional, Tuple, Callable, Dict
+
+import aloscene
 
 from nndepth.utils.base_trainer import BaseTrainer
 from nndepth.utils.trackers.wandb import WandbTracker
@@ -49,11 +54,48 @@ class RAFTTrainer(BaseTrainer):
         self.gradient_accumulation_steps = gradient_accumulation_steps
 
         self.accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
+        self.is_prepared = False
+
+    def predict_and_get_visualization(
+        model: nn.Module, sample: Dict[str, aloscene.Frame]
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get visualization of 1 example for debugging purposes
+
+        Args:
+            model (nn.Module): model
+            val_dataloader (DataLoader): validation data loader
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: left image, ground truth disparity, predicted disparity
+        """
+
+        def get_disp_image(
+            disp: aloscene.Disparity, min_disp: Optional[float] = None, max_disp: Optional[float] = None
+        ) -> np.ndarray:
+            disp_image = disp.__get_view__(min_disp, max_disp).image
+            disp_image = (disp_image * 255).astype(np.uint8)
+            return disp_image
+
+        left_frame, right_frame = sample["left"][:1], sample["right"][:0]
+        left_tensor, right_tensor = left_frame.as_tensor(), right_frame.as_tensor()
+        m_outputs = model(left_tensor, right_tensor)
+        disp_pred = m_outputs[-1]["up_disp"][0]
+        disp_pred = aloscene.Disparity(disp_pred, camera_side="left", disp_format="signed", names=("C", "H", "W"))
+
+        left_image = left_frame.norm255().as_tensor().cpu().numpy().squeeze().transpose(1, 2, 0).astype(np.uint8)
+        disp_gt = left_frame.disparity[0]
+        disp_gt = disp_gt.resize(disp_pred.shape[1:], mode="nearest")
+        min_disp, max_disp = disp_gt.min(), disp_gt.max()
+
+        disp_gt_image = get_disp_image(disp_gt, min_disp, max_disp)
+        disp_pred_image = get_disp_image(disp_pred, min_disp, max_disp)
+
+        return left_image, disp_gt_image, disp_pred_image
 
     def prepare(
         self,
         model: nn.Module,
-        criterion: nn.Module,
         train_dataloader: DataLoader,
         val_dataloader: DataLoader,
         optimizer: optim.Optimizer,
@@ -63,16 +105,31 @@ class RAFTTrainer(BaseTrainer):
         Prepare the model, criterion, optimizer, scheduler, train and validation dataloaders using the accelerator
         """
         # Prepare
-        model, criterion, optimizer, train_dataloader, val_dataloader, scheduler = self.accelerator.prepare(
-            model, criterion, optimizer, train_dataloader, val_dataloader, scheduler
+        model, optimizer, train_dataloader, val_dataloader, scheduler = self.accelerator.prepare(
+            model, optimizer, train_dataloader, val_dataloader, scheduler
         )
+        self.is_prepared = True
         logger.info("Finish accelerator preparation")
-        return model, criterion, optimizer, scheduler, train_dataloader, val_dataloader
+        return model, optimizer, scheduler, train_dataloader, val_dataloader
+
+    def resume_from_checkpoint(self, dir_path: str):
+        """
+        Resume training from the checkpoint
+
+        Args:
+            dir_path (str): path to the directory
+        """
+        self.load_state(dir_path)
+
+        # Load model, criterion, optimizer, scheduler, train and val dataloaders
+        assert self.is_prepared, "Prepare the trainer before resuming. See `prepare` method"
+        self.accelerator.load_state(dir_path)
+        logger.info("Accelerator state is resumed from checkpoint !")
 
     def train(
         self,
         model: nn.Module,
-        criterion: nn.Module,
+        criterion: Callable,
         train_dataloader: DataLoader,
         val_dataloader: DataLoader,
         optimizer: optim.Optimizer,
@@ -88,6 +145,8 @@ class RAFTTrainer(BaseTrainer):
             val_dataloader (DataLoader): validation data loader
             optimizer (optim.Optimizer): optimizer
         """
+        assert self.is_prepared, "Prepare the trainer before training. See `prepare` method"
+
         logger.info("Start training")
 
         if self.num_epochs is not None:
@@ -95,7 +154,7 @@ class RAFTTrainer(BaseTrainer):
         elif self.max_steps is not None:
             self.num_epochs = self.max_steps // len(train_dataloader) + 1
 
-        # Train loop
+        # Placeholders for metrics
         losses = []
         l_epe = []
         l_percent_0_5 = []
@@ -111,6 +170,7 @@ class RAFTTrainer(BaseTrainer):
         else:
             raise ValueError("val_interval must be either int or float <= 1")
 
+        # Start training
         with self.accelerator.accumulate(model):
             for epoch in range(current_epoch, self.num_epochs):
                 # Skip first batches if resuming
@@ -121,12 +181,12 @@ class RAFTTrainer(BaseTrainer):
                 for i_batch, batch in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")):
 
                     left_frame, right_frame = batch["left"], batch["right"]
-                    left_frame, right_frame = left_frame.as_tensor(), right_frame.as_tensor()
+                    left_tensor, right_tensor = left_frame.as_tensor(), right_frame.as_tensor()
 
                     # Forward
-                    m_outputs = model(left_frame, right_frame)
+                    m_outputs = model(left_tensor, right_tensor)
                     disp_gt = left_frame.disparity.as_tensor()
-                    loss = criterion(disp_gt, m_outputs)
+                    loss, metrics = criterion(disp_gt, m_outputs)
 
                     # Backward
                     self.accelerator.backward(loss)
@@ -137,13 +197,12 @@ class RAFTTrainer(BaseTrainer):
                     optimizer.zero_grad()
 
                     # Metrics
-                    losses.append(loss.item())
-                    epe, percent_0_5, percent_1, percent_3, percent_5 = self.compute_metrics(disp_gt, m_outputs)
-                    l_epe.append(epe)
-                    l_percent_0_5.append(percent_0_5)
-                    l_percent_1.append(percent_1)
-                    l_percent_3.append(percent_3)
-                    l_percent_5.append(percent_5)
+                    losses.append(loss.detach().item())
+                    l_epe.append(metrics["epe"])
+                    l_percent_0_5.append(metrics["0.5px"])
+                    l_percent_1.append(metrics["1px"])
+                    l_percent_3.append(metrics["3px"])
+                    l_percent_5.append(metrics["5px"])
 
                     # Log
                     if self.total_steps > 0 and self.total_steps % self.log_interval == 0:
@@ -153,10 +212,10 @@ class RAFTTrainer(BaseTrainer):
                                 "train/epoch": epoch,
                                 "train/loss": np.mean(losses),
                                 "train/epe": np.mean(l_epe),
-                                "train/percent_0_5": np.mean(l_percent_0_5),
-                                "train/percent_1": np.mean(l_percent_1),
-                                "train/percent_3": np.mean(l_percent_3),
-                                "train/percent_5": np.mean(l_percent_5),
+                                "train/percent_0_5px": np.mean(l_percent_0_5),
+                                "train/percent_1px": np.mean(l_percent_1),
+                                "train/percent_3px": np.mean(l_percent_3),
+                                "train/percent_5px": np.mean(l_percent_5),
                             }
                         )
                         losses = []
@@ -169,31 +228,89 @@ class RAFTTrainer(BaseTrainer):
                     # Validation
                     if self.total_steps > 0 and self.total_steps % val_interval_steps == 0:
                         model.eval()
-                        results = self.validate(model, criterion, val_dataloader)
+                        results = self.evaluate(model, criterion, val_dataloader)
+
+                        # Infer on 1 example to log for debugging purposes
+                        image, disp_gt, disp_pred = self.predict_and_get_visualization(
+                            model, next(iter(val_dataloader))
+                        )
+
                         tracker.log(
                             {
                                 "val/loss": results["loss"],
                                 "val/epe": results["epe"],
-                                "val/percent_0_5": results["percent_0_5"],
-                                "val/percent_1": results["percent_1"],
-                                "val/percent_3": results["percent_3"],
-                                "val/percent_5": results["percent_5"],
+                                "val/percent_0_5px": results["percent_0_5px"],
+                                "val/percent_1px": results["percent_1px"],
+                                "val/percent_3px": results["percent_3px"],
+                                "val/percent_5px": results["percent_5px"],
+                                "val/left_image": wandb.Image(image),
+                                "val/GT": wandb.Image(disp_gt),
+                                "val/Prediction": wandb.Image(disp_pred),
                             }
                         )
 
                         # Save checkpoint if best
-                        if results["loss"] > self.checkpoint_infos[-1]["metric"]:
-                            _ = self.checkpoint_infos.pop(-1)
-                            self.checkpoint_infos.append(
-                                {
-                                    "epoch": epoch,
-                                    "steps": self.total_steps,
-                                    "metric": results["loss"],
-                                    "metric_name": "loss",
-                                }
-                            )
-                            self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"])
-                            cp_dir = self.get_checkpoint_name(epoch, self.total_steps, results["loss"], "loss")
-                            self.accelerator.save_state(cp_dir)
+                        topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
+                            epoch, self.total_steps, results["loss"], "loss"
+                        )
+                        if topk_cp_dir:
+                            self.accelerator.save_state(os.path.join(self.artifact_dir, topk_cp_dir))
+                            # Remove old checkpoint
+                            if old_topk_cp:
+                                os.remove(os.path.join(self.artifact_dir, old_topk_cp))
 
+                        # Remove old checkpoint & Save latest checkpoint
+                        old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
+                        if old_latest_cp_dir:
+                            os.remove(old_latest_cp_dir)
+                        latest_cp_dir = self.get_latest_checkpoint_name(self.total_steps)
+                        self.accelerator.save_state(os.path.join(self.artifact_dir, latest_cp_dir))
+
+                        # Back to training mode
                         model.train(True)
+
+    @torch.no_grad()
+    def evaluate(self, model: nn.Module, criterion: Callable, dataloader: DataLoader) -> dict:
+        """
+        Evaluate RAFT-based model
+
+        Args:
+            model (nn.Module): model to evaluate
+            criterion (Callable): criterion function
+            dataloader (DataLoader): data loader
+
+        Returns:
+            dict: evaluation metrics: loss, epe, percent_0_5, percent_1, percent_3, percent_5
+        """
+        losses = []
+        epe = []
+        percent_0_5 = []
+        percent_1 = []
+        percent_3 = []
+        percent_5 = []
+
+        for batch in tqdm(dataloader, desc="Evaluating"):
+            left_frame, right_frame = batch["left"], batch["right"]
+            left_frame, right_frame = left_frame.as_tensor(), right_frame.as_tensor()
+
+            # Forward
+            m_outputs = model(left_frame, right_frame)
+            disp_gt = left_frame.disparity.as_tensor()
+            loss, metrics = criterion(disp_gt, m_outputs)
+
+            # Metrics
+            losses.append(loss.detach().item())
+            epe.append(metrics["epe"])
+            percent_0_5.append(metrics["0.5px"])
+            percent_1.append(metrics["1px"])
+            percent_3.append(metrics["3px"])
+            percent_5.append(metrics["5px"])
+
+        return {
+            "loss": np.mean(losses),
+            "epe": np.mean(epe),
+            "percent_0_5px": np.mean(percent_0_5),
+            "percent_1px": np.mean(percent_1),
+            "percent_2px": np.mean(percent_3),
+            "percent_5px": np.mean(percent_5),
+        }

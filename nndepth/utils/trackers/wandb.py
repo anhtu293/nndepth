@@ -23,10 +23,10 @@ class WandbTracker(object):
             project_name (str): Name of the project
             run_name (str): Name of the run
             root_log_dir (str, optional): Root directory to save logs. Defaults to None.
-            group_name (str, optional): Group name for the run. Defaults to None.
-            tags (list, optional): Tags for the run. Defaults to None.
-            notes (str, optional): Notes for the run. Defaults to None.
-            config (dict, optional): Configuration for the run. Defaults to None.
+            group_name (str, optional): Group name of the run. Defaults to None.
+            tags (list, optional): Tags of the run. Defaults to None.
+            notes (str, optional): Notes of the run. Defaults to None.
+            config (dict, optional): Configuration of the run. Defaults to None.
             resume (bool, optional): Whether to resume the run. Defaults to False.
         """
         self.project_name = project_name

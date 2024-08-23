@@ -1,1 +1,1 @@
-from nndepth.disparity.data_loaders.tartanair2disparity import TartanairDisparityDataLoader
+from nndepth.disparity.data_loaders.tartanair_disparity import TartanairDisparityDataLoader
