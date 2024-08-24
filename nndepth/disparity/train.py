@@ -27,7 +27,7 @@ def main():
     scheduler = lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=trainer.lr,
-        total_steps=trainer.total_steps + 100,
+        total_steps=trainer.max_steps + 100,
         anneal_strategy="linear",
         pct_start=0.05,
         cycle_momentum=False,

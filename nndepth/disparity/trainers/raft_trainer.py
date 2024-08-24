@@ -106,7 +106,7 @@ class RAFTTrainer(BaseTrainer):
         assert left_frame.disparity is not None, "Left frame must have disparity"
         assert (
             left_frame.normalization == "minmax_sym" and right_frame.normalization == "minmax_sym"
-        ), f"frames must be normalized with minmax_sym. Found {left_frame.normalization} and {right_frame.normalization}"
+        ), f"frames must be minmax_sym normalized. Found {left_frame.normalization} and {right_frame.normalization}"
         assert left_frame.names == ("B", "C", "H", "W") and right_frame.names == (
             "B",
             "C",
@@ -170,10 +170,10 @@ class RAFTTrainer(BaseTrainer):
 
         logger.info("Start training")
 
-        if self.num_epochs is not None:
-            self.max_steps = len(train_dataloader) * self.num_epochs
-        elif self.max_steps is not None:
+        if self.max_steps is not None:
             self.num_epochs = self.max_steps // len(train_dataloader) + 1
+        elif self.num_epochs is not None:
+            self.max_steps = len(train_dataloader) * self.num_epochs
 
         # Placeholders for metrics
         losses = []
@@ -183,7 +183,7 @@ class RAFTTrainer(BaseTrainer):
         l_percent_3 = []
         l_percent_5 = []
 
-        current_epoch = self.total_steps // len(train_dataloader)
+        current_epoch = self.current_steps // len(train_dataloader)
         if isinstance(self.val_interval, int):
             val_interval_steps = self.val_interval
         elif isinstance(self.val_interval, float) and self.val_interval <= 1:
@@ -191,16 +191,17 @@ class RAFTTrainer(BaseTrainer):
         else:
             raise ValueError("val_interval must be either int or float <= 1")
 
+        finish_training = False
+
         # Start training
         with self.accelerator.accumulate(model):
             for epoch in range(current_epoch, self.num_epochs):
                 # Skip first batches if resuming
                 train_dataloader = self.accelerator.skip_first_batches(
-                    train_dataloader, self.total_steps % len(train_dataloader)
+                    train_dataloader, self.current_steps % len(train_dataloader)
                 )
 
                 for i_batch, batch in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")):
-
                     left_frame, right_frame = batch["left"], batch["right"]
                     self.assert_input(left_frame, right_frame)
 
@@ -210,8 +211,6 @@ class RAFTTrainer(BaseTrainer):
                     m_outputs = model(left_tensor, right_tensor)
                     disp_gt = left_frame.disparity.as_tensor()
                     loss, metrics = criterion(disp_gt, m_outputs)
-                    if i_batch > 0 and i_batch % self.gradient_accumulation_steps == 0:
-                        self.total_steps += 1
 
                     # Backward
                     self.accelerator.backward(loss)
@@ -227,74 +226,99 @@ class RAFTTrainer(BaseTrainer):
                     l_percent_3.append(metrics["3px"])
                     l_percent_5.append(metrics["5px"])
 
-                    # Log
-                    if self.total_steps > 0 and self.total_steps % self.log_interval == 0:
-                        tracker.log(
-                            {
-                                "train/step": self.total_steps,
-                                "train/epoch": epoch,
-                                "train/lr": scheduler.get_last_lr()[0],
-                                "train/loss": np.mean(losses),
-                                "train/epe": np.mean(l_epe),
-                                "train/percent_0_5px": np.mean(l_percent_0_5),
-                                "train/percent_1px": np.mean(l_percent_1),
-                                "train/percent_3px": np.mean(l_percent_3),
-                                "train/percent_5px": np.mean(l_percent_5),
-                            }
-                        )
-                        losses = []
-                        l_epe = []
-                        l_percent_0_5 = []
-                        l_percent_1 = []
-                        l_percent_3 = []
-                        l_percent_5 = []
+                    # Accumulate steps & Log & Evaluate if needed
+                    if i_batch > 0 and i_batch % self.gradient_accumulation_steps == 0:
+                        self.current_steps += 1
 
-                    # Validation
-                    if self.total_steps > 0 and self.total_steps % val_interval_steps == 0:
-                        model.eval()
-                        results = self.evaluate(model, criterion, val_dataloader)
+                        # Log
+                        if self.current_steps > 0 and self.current_steps % self.log_interval == 0:
+                            tracker.log(
+                                {
+                                    "train/step": self.current_steps,
+                                    "train/epoch": epoch,
+                                    "train/lr": scheduler.get_last_lr()[0],
+                                    "train/loss": np.mean(losses),
+                                    "train/epe": np.mean(l_epe),
+                                    "train/percent_0_5px": np.mean(l_percent_0_5),
+                                    "train/percent_1px": np.mean(l_percent_1),
+                                    "train/percent_3px": np.mean(l_percent_3),
+                                    "train/percent_5px": np.mean(l_percent_5),
+                                }
+                            )
+                            losses = []
+                            l_epe = []
+                            l_percent_0_5 = []
+                            l_percent_1 = []
+                            l_percent_3 = []
+                            l_percent_5 = []
 
-                        # Infer on 1 example to log for debugging purposes
-                        image, disp_gt, disp_pred = self.predict_and_get_visualization(
-                            model, next(iter(val_dataloader))
-                        )
+                        # Validation
+                        if self.current_steps > 0 and self.current_steps % val_interval_steps == 0:
+                            model.eval()
+                            results = self.evaluate(model, criterion, val_dataloader)
 
-                        tracker.log(
-                            {
-                                "val/loss": results["loss"],
-                                "val/epe": results["epe"],
-                                "val/percent_0_5px": results["percent_0_5px"],
-                                "val/percent_1px": results["percent_1px"],
-                                "val/percent_3px": results["percent_3px"],
-                                "val/percent_5px": results["percent_5px"],
-                                "val/left_image": wandb.Image(image),
-                                "val/GT": wandb.Image(disp_gt),
-                                "val/Prediction": wandb.Image(disp_pred),
-                            }
-                        )
+                            # Infer on 1 example to log for debugging purposes
+                            image, disp_gt, disp_pred = self.predict_and_get_visualization(
+                                model, next(iter(val_dataloader))
+                            )
 
-                        # Save checkpoint if best
-                        topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
-                            epoch, self.total_steps, results["loss"], "loss", condition="min"
-                        )
-                        if topk_cp_dir:
-                            logger.info(f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints. Saving...")
-                            self.accelerator.save_state(os.path.join(self.artifact_dir, topk_cp_dir))
-                            # Remove old checkpoint
-                            if old_topk_cp:
-                                shutil.rmtree(os.path.join(self.artifact_dir, old_topk_cp))
-                        else:
-                            logger.info(f"loss: {results['loss']} not in top {self.save_best_k_cp} checkpoints")
+                            tracker.log(
+                                {
+                                    "val/loss": results["loss"],
+                                    "val/epe": results["epe"],
+                                    "val/percent_0_5px": results["percent_0_5px"],
+                                    "val/percent_1px": results["percent_1px"],
+                                    "val/percent_3px": results["percent_3px"],
+                                    "val/percent_5px": results["percent_5px"],
+                                    "val/left_image": wandb.Image(image),
+                                    "val/GT": wandb.Image(disp_gt),
+                                    "val/Prediction": wandb.Image(disp_pred),
+                                }
+                            )
 
-                        # Remove old checkpoint & Save latest checkpoint
-                        old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
-                        if old_latest_cp_dir:
-                            shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
-                        latest_cp_dir = self.get_latest_checkpoint_name(self.total_steps)
-                        self.accelerator.save_state(os.path.join(self.artifact_dir, latest_cp_dir))
+                            # Save checkpoint if best
+                            topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
+                                epoch, self.current_steps, results["loss"], "loss", condition="min"
+                            )
+                            if topk_cp_dir:
+                                logger.info(
+                                    f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints. Saving..."
+                                )
+                                self.accelerator.save_state(
+                                    os.path.join(self.artifact_dir, topk_cp_dir), safe_serialization=False
+                                )
+                                # Remove old checkpoint
+                                if old_topk_cp:
+                                    shutil.rmtree(os.path.join(self.artifact_dir, old_topk_cp))
+                            else:
+                                logger.info(f"loss: {results['loss']} not in top {self.save_best_k_cp} checkpoints")
 
-                        # Back to training mode
-                        model.train(True)
+                            # Remove old checkpoint & Save latest checkpoint
+                            old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
+                            if old_latest_cp_dir:
+                                shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
+                            latest_cp_dir = self.get_latest_checkpoint_name(self.current_steps)
+                            self.accelerator.save_state(
+                                os.path.join(self.artifact_dir, latest_cp_dir), safe_serialization=False
+                            )
+
+                            # Check if training is finished
+                            if self.current_steps >= self.max_steps:
+                                finish_training = True
+                                break
+
+                            # Back to training mode
+                            model.train(True)
+
+                if finish_training:
+                    break
+
+        # Save the last checkpoint
+        old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
+        if old_latest_cp_dir:
+            shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
+        latest_cp_dir = self.get_latest_checkpoint_name(self.current_steps)
+        self.accelerator.save_state(os.path.join(self.artifact_dir, latest_cp_dir), safe_serialization=False)
 
     @torch.no_grad()
     def evaluate(self, model: nn.Module, criterion: Callable, dataloader: DataLoader) -> dict:

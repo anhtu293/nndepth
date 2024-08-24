@@ -44,7 +44,7 @@ class BaseTrainer(object):
         self.num_val_samples = num_val_samples
         self.save_best_k_cp = save_best_k_cp
         self.checkpoint_infos = []
-        self.total_steps = 0
+        self.current_steps = 0
 
         self.setup_workdir()
 
@@ -140,6 +140,7 @@ class BaseTrainer(object):
         Args:
             dir_path (str): path to the directory
         """
+        cp_path = cp_path.rstrip("/")
         assert os.path.exists(cp_path) and cp_path.endswith(".pth"), f"{cp_path} must be a `.pth` file"
 
         checkpoint_infos = []
@@ -147,30 +148,36 @@ class BaseTrainer(object):
         dir_path = os.path.dirname(cp_path)
         if "latest" in file_name:
             # Load from latest checkpoint
-            self.total_steps = int(file_name.replace(".pth", "").split("_")[1].split("=")[1])
+            self.current_steps = int(file_name.replace(".pth", "").split("_")[1].split("=")[1])
             for f in os.listdir(dir_path):
                 if f.endswith(".pth") and "latest" not in f:
                     epoch = int(f.split("_")[0].split("=")[1])
                     steps = int(f.split("_")[1].split("=")[1])
                     metric = float(f.split("_")[2].split("=")[1].split(".")[0])
-                    checkpoint_infos.append({"epoch": epoch, "step": steps, "metric": metric})
+                    metric_name = f.split("_")[2].split("=")[0]
+                    checkpoint_infos.append(
+                        {"epoch": epoch, "steps": steps, "metric": metric, "metric_name": metric_name}
+                    )
         else:
             logger.info("Not loading from latest checkpoint but from a specific checkpoint.")
             # Load from a specific checkpoint
-            self.total_steps = int(file_name.split("_")[1].split("=")[1])
+            self.current_steps = int(file_name.split("_")[1].split("=")[1])
             for f in os.listdir(dir_path):
                 if f.endswith(".pth") and "latest" not in f:
                     steps = int(f.split("_")[1].split("=")[1])
-                    if steps > self.total_steps:
+                    if steps > self.current_steps:
                         continue
                     epoch = int(f.split("_")[0].split("=")[1])
                     metric = float(f.split("_")[2].split("=")[1].split(".")[0])
-                    checkpoint_infos.append({"epoch": epoch, "step": steps, "metric": metric})
+                    metric_name = f.split("_")[2].split("=")[0]
+                    checkpoint_infos.append(
+                        {"epoch": epoch, "step": steps, "metric": metric, "metric_name": metric_name}
+                    )
 
         checkpoint_infos = sorted(checkpoint_infos, key=lambda x: x["metric"])
         self.checkpoint_infos = checkpoint_infos
         logger.info(f"State of Trainer loaded from : {cp_path}")
-        logger.info(f"Total steps: {self.total_steps}")
+        logger.info(f"Total steps: {self.current_steps}")
         logger.info(f"Checkpoint infos: {self.checkpoint_infos}")
 
     def is_topk_checkpoint(
@@ -211,13 +218,13 @@ class BaseTrainer(object):
                 self.checkpoint_infos.append(
                     {
                         "epoch": epoch,
-                        "steps": self.total_steps,
+                        "steps": self.current_steps,
                         "metric": metric,
                         "metric_name": metric_name,
                     }
                 )
                 self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"])
-                new_cp_dir = self.get_topk_checkpoint_name(epoch, self.total_steps, metric, metric_name)
+                new_cp_dir = self.get_topk_checkpoint_name(epoch, self.current_steps, metric, metric_name)
                 replaced_cp_dir = self.get_topk_checkpoint_name(
                     replaced_cp["epoch"], replaced_cp["steps"], replaced_cp["metric"], replaced_cp["metric_name"]
                 )

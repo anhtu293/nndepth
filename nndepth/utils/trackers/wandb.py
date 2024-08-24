@@ -50,9 +50,7 @@ class WandbTracker(object):
             if os.path.exists(wandb_resume_path):
                 with open(wandb_resume_path, "r") as f:
                     id = json.load(f)["run_id"]
-            self.runner = wandb.init(
-                project=self.project_name, name=self.run_name, resume=True, dir=self.log_dir, id=id
-            )
+            self.run = wandb.init(project=self.project_name, name=self.run_name, resume=True, dir=self.log_dir, id=id)
         else:
             self.run = wandb.init(
                 project=self.project_name,
@@ -65,6 +63,10 @@ class WandbTracker(object):
                 id=run_unique_id,
                 dir=self.log_dir,
             )
+            # get unique id of the run from wandb-id.json
+            wandb_id_path = os.path.join(self.log_dir, "wandb", "wandb-id.json")
+            with open(wandb_id_path, "w") as f:
+                json.dump({"run_id": run_unique_id}, f)
 
         # Set step
         wandb.define_metric("train/step")
