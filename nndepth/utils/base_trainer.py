@@ -75,7 +75,7 @@ class BaseTrainer(object):
         Returns:
             str: checkpoint name
         """
-        return f"epoch-{epoch}_steps-{steps}_{metric_name}-{metric:.4f}.pth"
+        return f"epoch={epoch}_steps={steps}_{metric_name}={metric:.4f}.pth"
 
     def get_latest_checkpoint_name(self, steps: int) -> str:
         """
@@ -87,7 +87,7 @@ class BaseTrainer(object):
         Returns:
             str: checkpoint name
         """
-        return f"latest_steps-{steps}.pth"
+        return f"latest_steps={steps}.pth"
 
     @staticmethod
     def get_latest_checkpoint_from_dir(dir_path: str):
@@ -147,34 +147,34 @@ class BaseTrainer(object):
         dir_path = os.path.dirname(cp_path)
         if "latest" in file_name:
             # Load from latest checkpoint
-            self.total_steps = int(file_name.split("-")[1].split(".")[0])
+            self.total_steps = int(file_name.replace(".pth", "").split("_")[1].split("=")[1])
             for f in os.listdir(dir_path):
                 if f.endswith(".pth") and "latest" not in f:
-                    epoch = int(f.split("_")[0].split("-")[1])
-                    steps = int(f.split("_")[1].split("-")[1])
-                    metric = float(f.split("_")[2].split("-")[1].split(".")[0])
+                    epoch = int(f.split("_")[0].split("=")[1])
+                    steps = int(f.split("_")[1].split("=")[1])
+                    metric = float(f.split("_")[2].split("=")[1].split(".")[0])
                     checkpoint_infos.append({"epoch": epoch, "step": steps, "metric": metric})
         else:
             logger.info("Not loading from latest checkpoint but from a specific checkpoint.")
             # Load from a specific checkpoint
-            self.total_steps = int(file_name.split("_")[1].split("-")[1])
+            self.total_steps = int(file_name.split("_")[1].split("=")[1])
             for f in os.listdir(dir_path):
                 if f.endswith(".pth") and "latest" not in f:
-                    steps = int(f.split("_")[1].split("-")[1])
+                    steps = int(f.split("_")[1].split("=")[1])
                     if steps > self.total_steps:
                         continue
-                    epoch = int(f.split("_")[0].split("-")[1])
-                    metric = float(f.split("_")[2].split("-")[1].split(".")[0])
+                    epoch = int(f.split("_")[0].split("=")[1])
+                    metric = float(f.split("_")[2].split("=")[1].split(".")[0])
                     checkpoint_infos.append({"epoch": epoch, "step": steps, "metric": metric})
 
-        checkpoint_infos = sorted(checkpoint_infos, key=lambda x: x["metric"], reverse=True)
+        checkpoint_infos = sorted(checkpoint_infos, key=lambda x: x["metric"])
         self.checkpoint_infos = checkpoint_infos
         logger.info(f"State of Trainer loaded from : {cp_path}")
         logger.info(f"Total steps: {self.total_steps}")
         logger.info(f"Checkpoint infos: {self.checkpoint_infos}")
 
     def is_topk_checkpoint(
-        self, epoch: int, steps: int, metric: float, metric_name: str
+        self, epoch: int, steps: int, metric: float, metric_name: str, condition: str = "min"
     ) -> Tuple[Optional[str], Optional[str]]:
         """
         Save checkpoint
@@ -184,10 +184,13 @@ class BaseTrainer(object):
             steps (int): step number
             metric (float): metric value
             metric_name (str): name of the metric
+            condition (str): condition to select the best checkpoint. `max` or `min`. Defaults to `min`
 
         Returns:
             Tuple[Optional[str], Optional[str]]: new checkpoint path, replaced checkpoint path
         """
+        assert condition in ["max", "min"], "condition must be either `max` or `min`"
+
         new_cp_dir = None  # Path to save the new checkpoint
         replaced_cp_dir = None  # This will be useful to remove the old checkpoint
 
@@ -195,24 +198,29 @@ class BaseTrainer(object):
             self.checkpoint_infos.append(
                 {"epoch": epoch, "steps": steps, "metric": metric, "metric_name": metric_name}
             )
-            self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"], reverse=True)
+            self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"])
             new_cp_dir = self.get_topk_checkpoint_name(epoch, steps, metric, metric_name)
 
-        elif metric > self.checkpoint_infos[-1]["metric"]:
-            replaced_cp = self.checkpoint_infos.pop(-1)
-            self.checkpoint_infos.append(
-                {
-                    "epoch": epoch,
-                    "steps": self.total_steps,
-                    "metric": metric,
-                    "metric_name": metric_name,
-                }
-            )
-            self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"], reverse=True)
-            new_cp_dir = self.get_topk_checkpoint_name(epoch, self.total_steps, metric, metric_name)
-            replaced_cp_dir = self.get_topk_checkpoint_name(
-                replaced_cp["epoch"], replaced_cp["steps"], replaced_cp["metric"], replaced_cp["metric_name"]
-            )
+        else:
+            replaced_cp = None
+            if condition == "min" and metric < self.checkpoint_infos[-1]["metric"]:
+                replaced_cp = self.checkpoint_infos.pop(-1)
+            elif condition == "max" and metric > self.checkpoint_infos[0]["metric"]:
+                replaced_cp = self.checkpoint_infos.pop(0)
+            if replaced_cp is not None:
+                self.checkpoint_infos.append(
+                    {
+                        "epoch": epoch,
+                        "steps": self.total_steps,
+                        "metric": metric,
+                        "metric_name": metric_name,
+                    }
+                )
+                self.checkpoint_infos = sorted(self.checkpoint_infos, key=lambda x: x["metric"])
+                new_cp_dir = self.get_topk_checkpoint_name(epoch, self.total_steps, metric, metric_name)
+                replaced_cp_dir = self.get_topk_checkpoint_name(
+                    replaced_cp["epoch"], replaced_cp["steps"], replaced_cp["metric"], replaced_cp["metric_name"]
+                )
 
         return new_cp_dir, replaced_cp_dir
 

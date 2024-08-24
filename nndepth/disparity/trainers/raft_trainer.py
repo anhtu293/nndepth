@@ -1,4 +1,5 @@
 import os
+import shutil
 import torch
 import torch.nn as nn
 import numpy as np
@@ -94,6 +95,25 @@ class RAFTTrainer(BaseTrainer):
 
         return left_image, disp_gt_image, disp_pred_image
 
+    def assert_input(self, left_frame: aloscene.Frame, right_frame: aloscene.Frame):
+        """
+        Assert the input frames
+
+        Args:
+            left_frame (aloscene.Frame): left frame
+            right_frame (aloscene.Frame): right frame
+        """
+        assert left_frame.disparity is not None, "Left frame must have disparity"
+        assert (
+            left_frame.normalization == "minmax_sym" and right_frame.normalization == "minmax_sym"
+        ), f"frames must be normalized with minmax_sym. Found {left_frame.normalization} and {right_frame.normalization}"
+        assert left_frame.names == ("B", "C", "H", "W") and right_frame.names == (
+            "B",
+            "C",
+            "H",
+            "W",
+        ), "frames must have names ('B', 'C', 'H', 'W'). Found {left_frame.names} and {right_frame.names}"
+
     def prepare(
         self,
         model: nn.Module,
@@ -182,17 +202,19 @@ class RAFTTrainer(BaseTrainer):
                 for i_batch, batch in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")):
 
                     left_frame, right_frame = batch["left"], batch["right"]
+                    self.assert_input(left_frame, right_frame)
+
                     left_tensor, right_tensor = left_frame.as_tensor(), right_frame.as_tensor()
 
                     # Forward
                     m_outputs = model(left_tensor, right_tensor)
                     disp_gt = left_frame.disparity.as_tensor()
                     loss, metrics = criterion(disp_gt, m_outputs)
+                    if i_batch > 0 and i_batch % self.gradient_accumulation_steps == 0:
+                        self.total_steps += 1
 
                     # Backward
                     self.accelerator.backward(loss)
-                    if i_batch > 0 and i_batch % self.gradient_accumulation_steps == 0:
-                        self.total_steps += 1
                     optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
@@ -211,6 +233,7 @@ class RAFTTrainer(BaseTrainer):
                             {
                                 "train/step": self.total_steps,
                                 "train/epoch": epoch,
+                                "train/lr": scheduler.get_last_lr()[0],
                                 "train/loss": np.mean(losses),
                                 "train/epe": np.mean(l_epe),
                                 "train/percent_0_5px": np.mean(l_percent_0_5),
@@ -252,18 +275,21 @@ class RAFTTrainer(BaseTrainer):
 
                         # Save checkpoint if best
                         topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
-                            epoch, self.total_steps, results["loss"], "loss"
+                            epoch, self.total_steps, results["loss"], "loss", condition="min"
                         )
                         if topk_cp_dir:
+                            logger.info(f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints. Saving...")
                             self.accelerator.save_state(os.path.join(self.artifact_dir, topk_cp_dir))
                             # Remove old checkpoint
                             if old_topk_cp:
-                                os.rmdir(os.path.join(self.artifact_dir, old_topk_cp))
+                                shutil.rmtree(os.path.join(self.artifact_dir, old_topk_cp))
+                        else:
+                            logger.info(f"loss: {results['loss']} not in top {self.save_best_k_cp} checkpoints")
 
                         # Remove old checkpoint & Save latest checkpoint
                         old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
                         if old_latest_cp_dir:
-                            os.rmdir(os.path.join(self.artifact_dir, old_latest_cp_dir))
+                            shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
                         latest_cp_dir = self.get_latest_checkpoint_name(self.total_steps)
                         self.accelerator.save_state(os.path.join(self.artifact_dir, latest_cp_dir))
 
