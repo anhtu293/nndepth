@@ -38,8 +38,8 @@ gradient_accumulation_steps: 1
 #
 workdir: /home/aloception/nndepth
 project_name: raft_stereo
-experiment_name: test
-val_interval: 10
+experiment_name: BaseRaftStereo
+val_interval: 1.0
 log_interval: 50
-num_val_samples: 10
+num_val_samples: 5000
 save_best_k_cp: 3
