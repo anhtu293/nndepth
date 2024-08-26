@@ -74,7 +74,7 @@ class RAFTTrainer(BaseTrainer):
         def get_disp_image(
             disp: aloscene.Disparity, min_disp: Optional[float] = None, max_disp: Optional[float] = None
         ) -> np.ndarray:
-            disp_image = disp.__get_view__(min_disp, max_disp).image
+            disp_image = disp.__get_view__(min_disp=min_disp, max_disp=max_disp, cmap="magma").image
             disp_image = (disp_image * 255).astype(np.uint8)
             return disp_image
 
@@ -91,7 +91,7 @@ class RAFTTrainer(BaseTrainer):
         disp_gt = left_frame.disparity[0]
         disp_gt.names = ("C", "H", "W")  # Set names to avoid error in resize
         disp_gt = disp_gt.resize(disp_pred.shape[-2:], mode="nearest")
-        min_disp, max_disp = disp_gt.min(), disp_gt.max()
+        min_disp, max_disp = 0, disp_gt.abs().max().item()
 
         disp_gt_image = get_disp_image(disp_gt, min_disp, max_disp)
         disp_pred_image = get_disp_image(disp_pred, min_disp, max_disp)
