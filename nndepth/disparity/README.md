@@ -8,17 +8,15 @@ This module is used to implement - train - inference different neural networks f
 ## 1. Structure
 ```
 .
-├── callbacks ---> training callbacks
-├── criterion.py ---> Loss function
-├── data_modules ---> Data processing
+├── configs       --> Configuration files
+├── criterions    --> Loss functions & metrics
+├── data_loaders  --> Data loaders for training
 ├── __init__.py
-├── models ---> Implementation of models
-    ├── configs ---> configs of different models
+├── models        --> Model implementations
 ├── README.md
-├── scripts ---> Training scripts
-├── train.py ---> Lightning pipeline
-└── utils.py ---> Supported functions
-
+├── scripts
+├── trainers      --> Trainers
+└── train.py      --> Training scripts
 ```
 
 ## 2. How to launch the training
@@ -26,34 +24,18 @@ This module is used to implement - train - inference different neural networks f
 - At the moment, only the training on TartanAir dataset is supported.
 - Training arguments:
 ```
+usage: train.py [-h] --model_config MODEL_CONFIG --data_config DATA_CONFIG --training_config TRAINING_CONFIG [--resume_from_checkpoint RESUME_FROM_CHECKPOINT]
+
 options:
   -h, --help            show this help message and exit
-
-pl_helper:
-  --resume              Resume all the training, not only the weights.
-  --save                Save every epoch and keep the top_k
-  --save_top_k SAVE_TOP_K
-                        Stores up to top_k models, by default 3. Use save_top_k=-1 to store all checkpoints
-  --log [LOG]           Log results, can specify logger, by default None. If set but value not provided:wandb
-  --log_save_dir [LOG_SAVE_DIR]
-                        Path to save training log, by default None. If not set, use the default value in alonet_config.json
-  --cp_save_dir [CP_SAVE_DIR]
-                        Path to save training checkpoint, by default None. If not set, use the default value in alonet_config.json
-  --cpu                 Use the CPU instead of scaling on the vaiable GPUs
-  --run_id RUN_ID       Load the weights from this saved experiment
-  --monitor MONITOR     Metric to save/load weights, by default 'val_loss'
-  --no_run_id           Skip loading form run_id when an experiment is restored.
-  --project_run_id PROJECT_RUN_ID
-                        Project related with the run ID to load
-  --expe_name EXPE_NAME
-                        expe_name to be logged in wandb
-  --no_suffix           do not add date suffix to expe_name
-  --nostrict            load from checkpoint to run a model with different weights names (default False)
-
-LitDisparityModule:
   --model_config MODEL_CONFIG
-                        Path to model json config file
-  --lr LR               Learning rate
+                        Path to model config file
+  --data_config DATA_CONFIG
+                        Path to data config file
+  --training_config TRAINING_CONFIG
+                        Path to training config file
+  --resume_from_checkpoint RESUME_FROM_CHECKPOINT
+                        Path to checkpoint to resume.
 ```
 - Details of models and how to run the training with those models are below.
 
