@@ -51,6 +51,8 @@ class TartanairDisparityDataLoader(BaseDataLoader):
             frames = []
             transform_fn = self.train_transform if subset == "train" else self.val_transform
             for f in batch:
+                if f is None:
+                    continue
                 # Remove temporal dimension
                 frames.append({key: transform_fn(f[key][0]) for key in ["left", "right"]})
 

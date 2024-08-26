@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import os
+from loguru import logger
 from typing import List, Tuple, Dict
 
 import aloscene
@@ -22,6 +23,8 @@ class TartanairDataset(object):
 
     CAMERAS = ["left", "right"]
     LABELS = ["disparity", "depth", "segmentation"]
+
+    LOADING_RETRY_LIMIT = 10
 
     def __init__(
         self,
@@ -227,48 +230,58 @@ class TartanairDataset(object):
         return T @ P @ T_inv
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        sequence_data = self.items[idx]
+        nb_retry = 0
+        while nb_retry < self.LOADING_RETRY_LIMIT:
+            try:
+                sequence_data = self.items[idx]
 
-        env = sequence_data["env"]
-        seq = sequence_data["sequence"]
-        difficulty = sequence_data["level"]
+                env = sequence_data["env"]
+                seq = sequence_data["sequence"]
+                difficulty = sequence_data["level"]
 
-        sub_sequence_folder = os.path.join(
-            self.dataset_dir,
-            sequence_data["env"],
-            sequence_data["env"],
-            sequence_data["level"],
-            sequence_data["sequence"],
-        )
+                sub_sequence_folder = os.path.join(
+                    self.dataset_dir,
+                    sequence_data["env"],
+                    sequence_data["env"],
+                    sequence_data["level"],
+                    sequence_data["sequence"],
+                )
 
-        frames = {side: [] for side in self.cameras}
+                frames = {side: [] for side in self.cameras}
 
-        sequence_name = f"{env}-{difficulty}-{seq}"
+                sequence_name = f"{env}-{difficulty}-{seq}"
 
-        temporal_sequence = sequence_data["temporal_sequence"]
+                temporal_sequence = sequence_data["temporal_sequence"]
+                for el in temporal_sequence:
+                    left_pose = self.sequence_to_camera_pos[sequence_name]["pose_left"][el]
+                    left_pose = pos_quat2SE(left_pose)
+                    if self.pose_format == "camera":
+                        left_pose = self.NED2camera(left_pose)
 
-        for el in temporal_sequence:
-            left_pose = self.sequence_to_camera_pos[sequence_name]["pose_left"][el]
-            left_pose = pos_quat2SE(left_pose)
-            if self.pose_format == "camera":
-                left_pose = self.NED2camera(left_pose)
+                    right_pose = self.sequence_to_camera_pos[sequence_name]["pose_right"][el]
+                    right_pose = pos_quat2SE(right_pose)
+                    if self.pose_format == "camera":
+                        right_pose = self.NED2camera(right_pose)
 
-            right_pose = self.sequence_to_camera_pos[sequence_name]["pose_right"][el]
-            right_pose = pos_quat2SE(right_pose)
-            if self.pose_format == "camera":
-                right_pose = self.NED2camera(right_pose)
+                    poses = {"left": left_pose, "right": right_pose}
+                    for side in self.cameras:
+                        frame = self.get_frame(side, sub_sequence_folder, el)
+                        P = aloscene.Pose(torch.as_tensor(poses[side], dtype=torch.float32))
+                        frame.append_pose(P)
+                        frames[side].append(frame.temporal())
 
-            poses = {"left": left_pose, "right": right_pose}
-            for side in self.cameras:
-                frame = self.get_frame(side, sub_sequence_folder, el)
-                P = aloscene.Pose(torch.as_tensor(poses[side], dtype=torch.float32))
-                frame.append_pose(P)
-                frames[side].append(frame.temporal())
+                for side in frames:
+                    frames[side] = torch.cat(frames[side], dim=0)
 
-        for side in frames:
-            frames[side] = torch.cat(frames[side], dim=0)
-
-        return frames
+                return frames
+            except Exception as e:
+                nb_retry += 1
+                idx = (idx + 1) % len(self.items)
+                logger.info(
+                    f"Error while loading sequence {sequence_name} - Idx {idx}: {e}. Retry with sequence {idx}"
+                )
+        logger.error(Exception("Error while loading data. Retry limit reached"))
+        return None
 
     def __len__(self):
         return len(self.items)
