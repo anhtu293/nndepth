@@ -78,7 +78,10 @@ class RAFTTrainer(BaseTrainer):
             disp_image = (disp_image * 255).astype(np.uint8)
             return disp_image
 
-        left_frame, right_frame = sample["left"], sample["right"]
+        if sample["left"].shape[0] == 1:
+            left_frame, right_frame = sample["left"], sample["right"]
+        else:
+            left_frame, right_frame = sample["left"][:1], sample["right"][:1]
         left_tensor, right_tensor = left_frame.as_tensor(), right_frame.as_tensor()
         m_outputs = model(left_tensor, right_tensor)
         disp_pred = m_outputs[-1]["up_disp"][0]

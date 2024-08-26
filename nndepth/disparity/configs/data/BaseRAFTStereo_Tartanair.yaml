@@ -40,5 +40,5 @@ val_envs:
 #
 #         Base class for all data loaders
 #
-batch_size: 4
+batch_size: 6
 num_workers: 8

@@ -36,10 +36,10 @@ gradient_accumulation_steps: 1
 #                Useful to limit the number of samples during evaluation. Defaults to -1 (all samples)
 #             save_best_k_cp (int): number of best checkpoints to save
 #
-workdir: /home/aloception/nndepth
+workdir: /weights
 project_name: raft_stereo
 experiment_name: BaseRaftStereo
-val_interval: 1.0
+val_interval: 0.25
 log_interval: 50
-num_val_samples: 5000
+num_val_samples: -1
 save_best_k_cp: 3
