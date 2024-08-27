@@ -198,12 +198,11 @@ class RAFTTrainer(BaseTrainer):
 
         # Start training
         with self.accelerator.accumulate(model):
+            # Skip first batches if resuming
+            train_dataloader = self.accelerator.skip_first_batches(
+                train_dataloader, self.current_steps % len(train_dataloader)
+            )
             for epoch in range(current_epoch, self.num_epochs):
-                # Skip first batches if resuming
-                train_dataloader = self.accelerator.skip_first_batches(
-                    train_dataloader, self.current_steps % len(train_dataloader)
-                )
-
                 for i_batch, batch in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")):
                     left_frame, right_frame = batch["left"], batch["right"]
                     self.assert_input(left_frame, right_frame)
