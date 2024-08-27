@@ -186,7 +186,7 @@ class RAFTTrainer(BaseTrainer):
         l_percent_3 = []
         l_percent_5 = []
 
-        current_epoch = self.current_steps // len(train_dataloader)
+        current_epoch = self.current_steps * self.gradient_accumulation_steps // len(train_dataloader)
         if isinstance(self.val_interval, int):
             val_interval_steps = self.val_interval
         elif isinstance(self.val_interval, float) and self.val_interval <= 1:
@@ -198,12 +198,19 @@ class RAFTTrainer(BaseTrainer):
 
         # Start training
         with self.accelerator.accumulate(model):
-            # Skip first batches if resuming
-            train_dataloader = self.accelerator.skip_first_batches(
-                train_dataloader, self.current_steps % len(train_dataloader)
+            skipped_train_dataloader = self.accelerator.skip_first_batches(
+                train_dataloader, self.current_steps * self.gradient_accumulation_steps % len(train_dataloader)
             )
+            loss = torch.Tensor([0])
             for epoch in range(current_epoch, self.num_epochs):
-                for i_batch, batch in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")):
+                pbar = (
+                    tqdm(skipped_train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")
+                    if epoch == current_epoch
+                    else tqdm(train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")
+                )
+                for i_batch, batch in enumerate(pbar):
+                    pbar.set_postfix_str(f"Loss: {loss.item():.4f}")
+
                     left_frame, right_frame = batch["left"], batch["right"]
                     self.assert_input(left_frame, right_frame)
 
@@ -254,63 +261,61 @@ class RAFTTrainer(BaseTrainer):
                             l_percent_3 = []
                             l_percent_5 = []
 
-                        # Validation
-                        if self.current_steps > 0 and self.current_steps % val_interval_steps == 0:
-                            model.eval()
-                            results = self.evaluate(model, criterion, val_dataloader)
+                    # Validation
+                    if (i_batch + 1) % val_interval_steps == 0:
+                        model.eval()
+                        results = self.evaluate(model, criterion, val_dataloader)
 
-                            # Infer on 1 example to log for debugging purposes
-                            image, disp_gt, disp_pred = self.predict_and_get_visualization(
-                                model, next(iter(val_dataloader))
-                            )
+                        # Infer on 1 example to log for debugging purposes
+                        image, disp_gt, disp_pred = self.predict_and_get_visualization(
+                            model, next(iter(val_dataloader))
+                        )
 
-                            tracker.log(
-                                {
-                                    "val/loss": results["loss"],
-                                    "val/epe": results["epe"],
-                                    "val/percent_0_5px": results["percent_0_5px"],
-                                    "val/percent_1px": results["percent_1px"],
-                                    "val/percent_3px": results["percent_3px"],
-                                    "val/percent_5px": results["percent_5px"],
-                                    "val/left_image": wandb.Image(image),
-                                    "val/GT": wandb.Image(disp_gt),
-                                    "val/Prediction": wandb.Image(disp_pred),
-                                }
-                            )
+                        tracker.log(
+                            {
+                                "val/loss": results["loss"],
+                                "val/epe": results["epe"],
+                                "val/percent_0_5px": results["percent_0_5px"],
+                                "val/percent_1px": results["percent_1px"],
+                                "val/percent_3px": results["percent_3px"],
+                                "val/percent_5px": results["percent_5px"],
+                                "val/left_image": wandb.Image(image),
+                                "val/GT": wandb.Image(disp_gt),
+                                "val/Prediction": wandb.Image(disp_pred),
+                            }
+                        )
 
-                            # Save checkpoint if best
-                            topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
-                                epoch, self.current_steps, results["loss"], "loss", condition="min"
-                            )
-                            if topk_cp_dir:
-                                logger.info(
-                                    f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints. Saving..."
-                                )
-                                self.accelerator.save_state(
-                                    os.path.join(self.artifact_dir, topk_cp_dir), safe_serialization=False
-                                )
-                                # Remove old checkpoint
-                                if old_topk_cp:
-                                    shutil.rmtree(os.path.join(self.artifact_dir, old_topk_cp))
-                            else:
-                                logger.info(f"loss: {results['loss']} not in top {self.save_best_k_cp} checkpoints")
-
-                            # Remove old checkpoint & Save latest checkpoint
-                            old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
-                            if old_latest_cp_dir:
-                                shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
-                            latest_cp_dir = self.get_latest_checkpoint_name(self.current_steps)
+                        # Save checkpoint if best
+                        topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
+                            epoch, self.current_steps, results["loss"], "loss", condition="min"
+                        )
+                        if topk_cp_dir:
+                            logger.info(f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints. Saving...")
                             self.accelerator.save_state(
-                                os.path.join(self.artifact_dir, latest_cp_dir), safe_serialization=False
+                                os.path.join(self.artifact_dir, topk_cp_dir), safe_serialization=False
                             )
+                            # Remove old checkpoint
+                            if old_topk_cp:
+                                shutil.rmtree(os.path.join(self.artifact_dir, old_topk_cp))
+                        else:
+                            logger.info(f"loss: {results['loss']} not in top {self.save_best_k_cp} checkpoints")
 
-                            # Check if training is finished
-                            if self.current_steps >= self.max_steps:
-                                finish_training = True
-                                break
+                        # Remove old checkpoint & Save latest checkpoint
+                        old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
+                        if old_latest_cp_dir:
+                            shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
+                        latest_cp_dir = self.get_latest_checkpoint_name(self.current_steps)
+                        self.accelerator.save_state(
+                            os.path.join(self.artifact_dir, latest_cp_dir), safe_serialization=False
+                        )
 
-                            # Back to training mode
-                            model.train(True)
+                        # Check if training is finished
+                        if self.current_steps >= self.max_steps:
+                            finish_training = True
+                            break
+
+                        # Back to training mode
+                        model.train(True)
 
                 if finish_training:
                     break
