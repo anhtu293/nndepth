@@ -153,7 +153,7 @@ class BaseTrainer(object):
                 if f.endswith(".pth") and "latest" not in f:
                     epoch = int(f.split("_")[0].split("=")[1])
                     steps = int(f.split("_")[1].split("=")[1])
-                    metric = float(f.split("_")[2].split("=")[1].split(".")[0])
+                    metric = float(f.replace(".pth", "").split("_")[2].split("=")[1])
                     metric_name = f.split("_")[2].split("=")[0]
                     checkpoint_infos.append(
                         {"epoch": epoch, "steps": steps, "metric": metric, "metric_name": metric_name}
@@ -168,7 +168,7 @@ class BaseTrainer(object):
                     if steps > self.current_steps:
                         continue
                     epoch = int(f.split("_")[0].split("=")[1])
-                    metric = float(f.split("_")[2].split("=")[1].split(".")[0])
+                    metric = float(f.replace(".pth", "").split("_")[2].split("=")[1])
                     metric_name = f.split("_")[2].split("=")[0]
                     checkpoint_infos.append(
                         {"epoch": epoch, "step": steps, "metric": metric, "metric_name": metric_name}
