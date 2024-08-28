@@ -3,6 +3,7 @@ import torch
 import yaml
 import importlib
 from typing import Tuple, Union
+from loguru import logger
 
 from nndepth.utils.base_trainer import BaseTrainer
 from nndepth.utils.base_dataloader import BaseDataLoader
@@ -17,7 +18,7 @@ def add_common_args(parser: ArgumentParser) -> ArgumentParser:
 
 
 def load_weights(model: torch.nn.Module, weights: str, strict_load: bool = True, device=torch.device("cpu")):
-    state_dict = torch.load(weights, map_location=device)["state_dict"]
+    state_dict = torch.load(weights, map_location=device)
     checkpoints = {}
     for k, v in state_dict.items():
         if k[:6] == "model.":
@@ -26,7 +27,7 @@ def load_weights(model: torch.nn.Module, weights: str, strict_load: bool = True,
             key = k
         checkpoints[key] = v
     model.load_state_dict(checkpoints, strict=strict_load)
-    print(f"[INFO]: Loaded weights from {weights}")
+    logger.info(f"Loaded weights from {weights}")
     return model
 
 

@@ -4,11 +4,13 @@ import argparse
 from tqdm import tqdm
 import matplotlib
 import yaml
+from typing import Tuple
 
 matplotlib.use("TkAgg")
 
 import aloscene
 
+from nndepth.utils.common import instantiate_with_config_file, load_weights
 from nndepth.disparity import MODELS
 
 
@@ -37,17 +39,16 @@ def parse_args():
     return args
 
 
+def preprocess_frame(frame: aloscene.Frame, HW: Tuple[int, int]) -> aloscene.Frame:
+    return frame.resize(HW).norm_minmax_sym().batch()
+
+
 @torch.no_grad()
 def main(args):
-    # load model
-    with open(args.model_config_file, "r") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-    config["weights"] = args.weights
-    config["strict_load"] = True
-    model_name = args.model_config_file.split("/")[-1].split(".")[0]
-    for cls in MODELS:
-        if model_name == cls.__name__:
-            model = cls(**config)
+    # Instantiate the model
+    model, model_config = instantiate_with_config_file(args.model_config_file, "nndepth.disparity.models")
+    model = load_weights(model, args.weights, strict_load=True)
+    model.eval()
     print("Model is loaded successfully !")
 
     if args.save_format == "image":
@@ -69,15 +70,23 @@ def main(args):
     print(f"Found {len(left_files)} frames !")
 
     for idx, (left, right) in tqdm(enumerate(zip(left_files, right_files))):
-        left_frame = aloscene.Frame(left).resize(args.HW).norm_minmax_sym().batch()
-        right_frame = aloscene.Frame(right).resize(args.HW).norm_minmax_sym().batch()
+        left_frame = preprocess_frame(aloscene.Frame(left), args.HW)
+        right_frame = preprocess_frame(aloscene.Frame(right), args.HW)
+
+        left_tensor = left_frame.as_tensor()
+        right_tensor = right_frame.as_tensor()
 
         # get model output
-        output = model(left_frame, right_frame)
+        output = model(left_tensor, right_tensor)
 
         # format output into aloscene.Disparity object
-        output = model.inference(output, only_last=True)
-        disp_view = output.get_view(min_disp=None, max_disp=None, cmap="RdYlGn")
+        disp_pred = aloscene.Disparity(
+                output[-1]["up_disp"],
+                names=("B", "C", "H", "W"),
+                camera_side="left",
+                disp_format="signed",
+            )
+        disp_view = disp_pred.get_view(min_disp=None, max_disp=None, cmap="RdYlGn")
 
         # get frame visualization
         frame_view = left_frame.get_view()
