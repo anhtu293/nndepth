@@ -3,7 +3,7 @@ import torch
 import argparse
 from tqdm import tqdm
 import matplotlib
-import yaml
+from loguru import logger
 from typing import Tuple
 
 matplotlib.use("TkAgg")
@@ -11,12 +11,11 @@ matplotlib.use("TkAgg")
 import aloscene
 
 from nndepth.utils.common import instantiate_with_config_file, load_weights
-from nndepth.disparity import MODELS
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_config_file", type=str, required=True, help="Path to model config file")
+    parser.add_argument("--model_config", type=str, required=True, help="Path to model config file")
     parser.add_argument("--weights", type=str, required=True, help="Path to model weight")
     parser.add_argument("--left_path", type=str, required=True, help="Path to directory of left images")
     parser.add_argument("--right_path", type=str, required=True, help="Path to directory of right images")
@@ -46,10 +45,10 @@ def preprocess_frame(frame: aloscene.Frame, HW: Tuple[int, int]) -> aloscene.Fra
 @torch.no_grad()
 def main(args):
     # Instantiate the model
-    model, model_config = instantiate_with_config_file(args.model_config_file, "nndepth.disparity.models")
-    model = load_weights(model, args.weights, strict_load=True)
+    model, model_config = instantiate_with_config_file(args.model_config, "nndepth.disparity.models")
+    model = load_weights(model, args.weights, strict_load=True).cuda()
     model.eval()
-    print("Model is loaded successfully !")
+    logger.info("Model is loaded successfully !")
 
     if args.save_format == "image":
         os.makedirs(args.output, exist_ok=True)
@@ -67,21 +66,21 @@ def main(args):
                    Found {len(left_files)} left frames and {len(right_files)} right frames !"
         )
 
-    print(f"Found {len(left_files)} frames !")
+    logger.info(f"Found {len(left_files)} frames !")
 
     for idx, (left, right) in tqdm(enumerate(zip(left_files, right_files))):
         left_frame = preprocess_frame(aloscene.Frame(left), args.HW)
         right_frame = preprocess_frame(aloscene.Frame(right), args.HW)
 
-        left_tensor = left_frame.as_tensor()
-        right_tensor = right_frame.as_tensor()
+        left_tensor = left_frame.as_tensor().cuda()
+        right_tensor = right_frame.as_tensor().cuda()
 
         # get model output
         output = model(left_tensor, right_tensor)
 
         # format output into aloscene.Disparity object
         disp_pred = aloscene.Disparity(
-                output[-1]["up_disp"],
+                output[-1]["up_disp"].cpu(),
                 names=("B", "C", "H", "W"),
                 camera_side="left",
                 disp_format="signed",

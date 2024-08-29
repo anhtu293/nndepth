@@ -32,7 +32,14 @@ class RAFTCriterion:
             i_loss = (m_dict["up_disp"] - gt).abs()
             disp_loss += i_weight * (valid * i_loss).mean()
 
-        epe = torch.sum((m_outputs[-1]["up_disp"] - disp_gt) ** 2, dim=1).sqrt()
+        # Compute metrics
+        if m_outputs[-1]["up_disp"].shape[-2:] != disp_gt.shape[-2:]:
+            scale = disp_gt.shape[-1] // m_outputs[-1]["up_disp"].shape[-1]
+            gt = -F.max_pool2d(-disp_gt, kernel_size=scale) / scale
+            gt = F.interpolate(gt, size=m_outputs[-1]["up_disp"].shape[-2:])
+        epe = torch.sum((m_outputs[-1]["up_disp"] - gt) ** 2, dim=1).sqrt()
+        mag = torch.sum(gt**2, dim=1, keepdim=True).sqrt()
+        valid = mag < self.max_flow
         epe = epe.view(-1)[valid.view(-1)]
 
         metrics = {

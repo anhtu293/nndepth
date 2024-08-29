@@ -42,12 +42,12 @@ options:
 ## 3. How to launch the inference
 - Script `nndepth/disparity/scripts/inference.py`:
 ```
-usage: inference.py [-h] --model_config_file MODEL_CONFIG_FILE --weights WEIGHTS --left_path LEFT_PATH --right_path RIGHT_PATH [--HW HW [HW ...]] --output OUTPUT [--render]
+usage: inference.py [-h] --model_config model_config --weights WEIGHTS --left_path LEFT_PATH --right_path RIGHT_PATH [--HW HW [HW ...]] --output OUTPUT [--render]
                     [--save_format {image,video}]
 
 options:
   -h, --help            show this help message and exit
-  --model_config_file MODEL_CONFIG_FILE
+  --model_config model_config
                         Path to model config file
   --weights WEIGHTS     Path to model weight
   --left_path LEFT_PATH
@@ -231,7 +231,7 @@ options:
 - Download checkpoint trained on TartanAir [here]() (***will be updated soon***)
 
 ```bash
-python nndepth/disparity/scripts/inference.py --model_config_file nndepth/disparity/configs/models/BaseRAFTStereo.ymal --weights  PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samp
+python nndepth/disparity/scripts/inference.py --model_config nndepth/disparity/configs/models/BaseRAFTStereo.ymal --weights  PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samp
 les/stereo/right/ --HW 480 640  --output test --save_format image
 ```
 
@@ -394,7 +394,7 @@ les/stereo/right/ --HW 480 640  --output test --save_format image
   ## Inference command
   - Download checkpoint trained on TartanAir [Update soon]()
   ```bash
-  python nndepth/disparity/scripts/inference.py --model_config_file nndepth/disparity/configs/models/CREStereoBase.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+  python nndepth/disparity/scripts/inference.py --model_config nndepth/disparity/configs/models/CREStereoBase.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
   ```
 </details>
 
@@ -549,7 +549,7 @@ les/stereo/right/ --HW 480 640  --output test --save_format image
   ## Inference command
   - Download checkpoint trained on TartanAir [Update soon]()
   ```bash
-  python nndepth/disparity/scripts/inference.py --model_config_file nndepth/disparity/configs/models/IGEVStereoMBNet.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+  python nndepth/disparity/scripts/inference.py --model_config nndepth/disparity/configs/models/IGEVStereoMBNet.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
   ```
 
 </details>

@@ -90,7 +90,7 @@ class TartanairDisparityDataLoader(BaseDataLoader):
         )
         dataloader = DataLoader(
             self.val_dataset,
-            batch_size=self.batch_size,
+            batch_size=1,
             num_workers=self.num_workers,
             sampler=RandomSampler(self.val_dataset),
             collate_fn=self.collate_fn(subset="val"),
