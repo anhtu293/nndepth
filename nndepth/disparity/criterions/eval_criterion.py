@@ -4,7 +4,7 @@ from typing import Dict
 
 
 class EvalCriterion:
-    def __init__(self, d_threshold: dict = None):
+    def __init__(self, d_threshold: dict = None, max_flow: int = 1000):
         """
         Evaluation Metric Computation class
 
@@ -13,8 +13,11 @@ class EvalCriterion:
                 Example: {"kitti-d1": 3.0}
         """
         self.d_threshold = d_threshold
+        self.max_flow = max_flow
 
-    def __call__(self, disp_gt: torch.Tensor, disp_pred: torch.Tensor) -> Dict[str, float]:
+    def __call__(
+            self, disp_gt: torch.Tensor, disp_pred: torch.Tensor, valid_mask: torch.Tensor = None
+    ) -> Dict[str, float]:
         """
         Compute metrics
         Args:
@@ -37,6 +40,8 @@ class EvalCriterion:
         epe = torch.sum((disp_pred - gt) ** 2, dim=1).sqrt()
         mag = torch.sum(gt**2, dim=1, keepdim=True).sqrt()
         valid = mag < self.max_flow
+        if valid_mask is not None:
+            valid = valid & valid_mask
         epe = epe.view(-1)[valid.view(-1)]
 
         metrics = {
@@ -44,5 +49,5 @@ class EvalCriterion:
         }
         if self.d_threshold is not None:
             for key, thres in self.d_threshold.items():
-                metrics[key] = (epe > thres).mean().item()
+                metrics[key] = (epe > thres).float().mean().item()
         return metrics

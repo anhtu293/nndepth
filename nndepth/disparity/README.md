@@ -40,7 +40,7 @@ options:
 - Details of models and how to run the training with those models are below.
 
 ## 3. How to launch the inference
-- Script `nndepth/disparity/scripts/inference.py`:
+- Script `nndepth/disparity/inference.py`:
 ```
 usage: inference.py [-h] --model_config model_config --weights WEIGHTS --left_path LEFT_PATH --right_path RIGHT_PATH [--HW HW [HW ...]] --output OUTPUT [--render]
                     [--save_format {image,video}]
@@ -81,9 +81,38 @@ options:
 │   ├── 3_right.png
 │   └── 4_right.png
 ```
+
+## 4. Commands
+### Training
+```bash
+python train.py --model_config PATH --data_config PATH --training_config PATH
+```
+Detail configuration for each model & training dataset are in [next section](#5-supported-models).
+
+### inference
+```bash
+python nndepth/disparity/inference.py --model_config PATH_TO_MODEL_CONFIG_YAML --weights  PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+```
+### Evaluation
+- **Kitti Stereo 2015**
+```bash
+python nndepth/disparity/scripts/evaluate.py --model_config PATH_TO_MODEL_CFG --data_config nndepth/disparity/configs/data/Kitti2015DisparityDataLoader.yaml --weights PATH_TO_CHECKPOINT --metric_name kitti-d1 --metric_threshold 3 --output results.txt
+```
+The results will be saved in `--output` file and have following format
+```
++----------+-----------+
+| Metric   |     Value |
++==========+===========+
+| epe      | 1.59763   |
++----------+-----------+
+| kitti-d1 | 0.0952964 |
++----------+-----------+
+```
+**More dataset and benchmark of models on these datasets will be available soon**.
+
 - Detail commands & weights for each model are in the next section.
 
-## 4. Supported models
+## 5. Supported models
 - Trained weights and configuration can be found [here](https://drive.google.com/drive/folders/1hoOflbJ_75kmucyyN7eTwFT6le44oDuJ)
 <details>
   <summary><b> RAFT-Stereo</b></summary>
@@ -228,12 +257,11 @@ options:
   ```
 
   ## Inference command
-- Download checkpoint trained on TartanAir [here]() (***will be updated soon***)
+  - Download checkpoint trained on TartanAir [here]() (***will be updated soon***)
 
-```bash
-python nndepth/disparity/scripts/inference.py --model_config nndepth/disparity/configs/models/BaseRAFTStereo.ymal --weights  PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samp
-les/stereo/right/ --HW 480 640  --output test --save_format image
-```
+  ```bash
+  python nndepth/disparity/inference.py --model_config nndepth/disparity/configs/models/BaseRAFTStereo.ymal --weights  PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+  ```
 
 </details>
 
@@ -377,8 +405,8 @@ les/stereo/right/ --HW 480 640  --output test --save_format image
   #             save_best_k_cp (int): number of best checkpoints to save
   #
   workdir: /weights
-  project_name: raft_stereo
-  experiment_name: BaseRaftStereo
+  project_name: cres_stereo
+  experiment_name: CREStereoBase
   val_interval: 0.25
   log_interval: 50
   num_val_samples: -1
@@ -394,7 +422,7 @@ les/stereo/right/ --HW 480 640  --output test --save_format image
   ## Inference command
   - Download checkpoint trained on TartanAir [Update soon]()
   ```bash
-  python nndepth/disparity/scripts/inference.py --model_config nndepth/disparity/configs/models/CREStereoBase.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+  python nndepth/disparity/inference.py --model_config nndepth/disparity/configs/models/CREStereoBase.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
   ```
 </details>
 
@@ -532,8 +560,8 @@ les/stereo/right/ --HW 480 640  --output test --save_format image
   #             save_best_k_cp (int): number of best checkpoints to save
   #
   workdir: /weights
-  project_name: raft_stereo
-  experiment_name: BaseRaftStereo
+  project_name: igev_stereo
+  experiment_name: IGEVStereoMBNet
   val_interval: 0.25
   log_interval: 50
   num_val_samples: -1
@@ -549,7 +577,7 @@ les/stereo/right/ --HW 480 640  --output test --save_format image
   ## Inference command
   - Download checkpoint trained on TartanAir [Update soon]()
   ```bash
-  python nndepth/disparity/scripts/inference.py --model_config nndepth/disparity/configs/models/IGEVStereoMBNet.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+  python nndepth/disparity/inference.py --model_config nndepth/disparity/configs/models/IGEVStereoMBNet.yaml --weights PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
   ```
 
 </details>

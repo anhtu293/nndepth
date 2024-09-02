@@ -10,8 +10,10 @@ from aloscene.camera_calib import CameraIntrinsic, CameraExtrinsic
 from alodataset.utils.kitti import load_calib_cam_to_cam
 
 
-class KittiStereo2015(object):
+class KittiStereo2015:
     SPLIT_FOLDERS = {"train": "training", "val": "testing"}
+    LABELS = ["right", "disp_noc", "disp_occ"]
+    CAMERAS = ["left", "right"]
 
     def __init__(
         self,
@@ -19,18 +21,11 @@ class KittiStereo2015(object):
         subset: str = "train",
         sequence_start=0,
         sequence_end=11,
-        load: list = [
-            "right",
-            "disp_noc",
-            "disp_occ",
-            "flow_occ",
-            "flow_noc",
-            "scene_flow",
-            "obj_map",
-        ],
+        cameras: list = ["left", "right"],
+        labels: list = ["disp_occ"],
     ):
         """
-        Stereo, Flow, SceneFlow Tasks from Kitti 2015 dataset.
+        Stereo Tasks from Kitti 2015 dataset.
         Parameters
         ----------
         name : str
@@ -42,7 +37,7 @@ class KittiStereo2015(object):
             sequence_end is the last image to load.
         grayscale : bool
             If True, load images in grayscale.
-        load : List[str]
+        labels : List[str]
             List of data to load. Available data are:
             - right: right image
             - disp_noc: disparity map without occlusions
@@ -61,15 +56,23 @@ class KittiStereo2015(object):
         """
         super().__init__()
         assert subset in ["train", "val"], "subset must be in [`train`, `val`]"
+        assert not ("disp_noc" in labels and "disp_occ" in labels), (
+            "only 1 disparity (`disp_occ` or `disp_noc`) can be passed to labels"
+        )
+        assert all([x in self.LABELS for x in labels]), f"labels must be in {self.LABELS}, found {labels}"
+        assert all([c in self.CAMERAS for c in cameras]), f"cameras must be in {self.CAMERAS}, found {cameras}"
+        assert "left" in cameras or "right" in cameras, f"`left` or `right` must be in cameras, found {cameras}"
+
         self.dataset_dir = dataset_dir
         self.subset = subset
         self.sequence_start = sequence_start
         self.sequence_end = sequence_end
-        self.load = load
+        self.cameras = cameras
+        self.labels = labels
 
         assert sequence_start <= sequence_end, "sequence_start should be less than sequence_end"
 
-        if "disp_noc" in load or "disp_occ" in load:
+        if "disp_noc" in labels or "disp_occ" in labels:
             assert sequence_start <= 11 and sequence_end >= 10, "Disparity is not available for this frame range"
 
         # Load sequence length
@@ -122,11 +125,12 @@ class KittiStereo2015(object):
         # frame to compute the scene flow.
         for index in range(self.sequence_end, self.sequence_start - 1, -1):
             sequence[index] = {}
-            sequence[index]["left"] = Frame(os.path.join(self.split_folder, f"image_2/{idx:06d}_{index:02d}.png"))
-            sequence[index]["left"].baseline = calib["baseline"]
-            sequence[index]["left"].append_cam_intrinsic(calib["left_intrinsic"])
-            sequence[index]["left"].append_cam_extrinsic(calib["left_extrinsic"])
-            if "right" in self.load:
+            if "left" in self.cameras:
+                sequence[index]["left"] = Frame(os.path.join(self.split_folder, f"image_2/{idx:06d}_{index:02d}.png"))
+                sequence[index]["left"].baseline = calib["baseline"]
+                sequence[index]["left"].append_cam_intrinsic(calib["left_intrinsic"])
+                sequence[index]["left"].append_cam_extrinsic(calib["left_extrinsic"])
+            if "right" in self.cameras:
                 sequence[index]["right"] = Frame(os.path.join(self.split_folder, f"image_3/{idx:06d}_{index:02d}.png"))
                 sequence[index]["right"].baseline = ["baseline"]
                 sequence[index]["right"].append_cam_intrinsic(calib["right_intrinsic"])
@@ -135,44 +139,40 @@ class KittiStereo2015(object):
             # Frames at index 10 and 11 are the only one who have ground truth in dataset.
             if index == 11:
                 dummy_disp_size = (1, sequence[index]["left"].H, sequence[index]["left"].W)
-                if "disp_noc" in self.load:
+                if "disp_noc" in self.labels:
                     sequence[11]["left"].append_disparity(
                         self.load_disp(os.path.join(self.split_folder, f"disp_noc_1/{idx:06d}_10.png"), "left"),
-                        "warped_disp_noc",
                     )
-                if "disp_occ" in self.load:
+                if "disp_occ" in self.labels:
                     sequence[11]["left"].append_disparity(
                         self.load_disp(os.path.join(self.split_folder, f"disp_occ_1/{idx:06d}_10.png"), "left"),
-                        "warped_disp_occ",
                     )
             elif index == 10:
-                if "disp_noc" in self.load:
+                if "disp_noc" in self.labels:
                     sequence[10]["left"].append_disparity(
                         self.load_disp(os.path.join(self.split_folder, f"disp_noc_0/{idx:06d}_10.png"), "left"),
-                        "warped_disp_noc",
                     )
-                if "disp_occ" in self.load:
+                if "disp_occ" in self.labels:
                     sequence[10]["left"].append_disparity(
                         self.load_disp(os.path.join(self.split_folder, f"disp_occ_0/{idx:06d}_10.png"), "left"),
-                        "warped_disp_occ",
                     )
             else:
                 dummy_disp_size = (1, sequence[index]["left"].H, sequence[index]["left"].W)
-                if "disp_noc" in self.load:
+                if "disp_noc" in self.labels:
                     dummy_disp = Disparity.dummy(dummy_disp_size, ("C", "H", "W")).signed("left")
-                    sequence[index]["left"].append_disparity(dummy_disp, "warped_disp_noc")
-                if "disp_occ" in self.load:
+                    sequence[index]["left"].append_disparity(dummy_disp)
+                if "disp_occ" in self.labels:
                     dummy_disp = Disparity.dummy(dummy_disp_size, ("C", "H", "W")).signed("left")
-                    sequence[index]["left"].append_disparity(dummy_disp, "warped_disp_occ")
+                    sequence[index]["left"].append_disparity(dummy_disp)
 
             sequence[index]["left"] = sequence[index]["left"].temporal()
-            if "right" in self.load:
+            if "right" in self.cameras:
                 sequence[index]["right"] = sequence[index]["right"].temporal()
 
         result = {}
         left = [sequence[frame]["left"] for frame in range(self.sequence_start, self.sequence_end + 1)]
         result["left"] = torch.cat(left, dim=0)
-        if "right" in self.load:
+        if "right" in self.cameras:
             right = [sequence[frame]["right"] for frame in range(self.sequence_start, self.sequence_end + 1)]
             result["right"] = torch.cat(right, dim=0)
 
@@ -198,7 +198,8 @@ class KittiStereo2015(object):
 if __name__ == "__main__":
     from random import randint
 
-    dataset = KittiStereo2015(sequence_start=10, sequence_end=11)
+    dataset = KittiStereo2015(sequence_start=10, sequence_end=10)
     obj = dataset[randint(0, len(dataset))]
-    print(obj["left"])
+    print(obj["left"].shape)
+    print(obj["left"].disparity)
     obj["left"].get_view().render()

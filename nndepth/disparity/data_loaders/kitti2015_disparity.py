@@ -1,19 +1,17 @@
 from torch.utils.data import RandomSampler, DataLoader
-from typing import List, Tuple
+from typing import Tuple
 
 import aloscene
 
 from nndepth.utils.base_dataloader import BaseDataLoader
-from nndepth.datasets import TartanairDataset
+from nndepth.datasets import KittiStereo2015
 
 
-class TartanairDisparityDataLoader(BaseDataLoader):
+class Kitti2015DisparityDataLoader(BaseDataLoader):
     def __init__(
         self,
-        dataset_dir: str = "/data/tartanair",
-        HW: Tuple[int, int] = [384, 496],
-        train_envs: List[str] = ["abandonedfactory"],
-        val_envs: List[str] = ["abandonedfactory_night"],
+        dataset_dir: str = "/data/kitti/stereo_2015",
+        HW: Tuple[int, int] = [375, 1242],
         **kwargs,
     ):
         """
@@ -24,14 +22,10 @@ class TartanairDisparityDataLoader(BaseDataLoader):
             batch_size (int): batch size
             num_workers (int): number of workers
             HW (Tuple[int, int]): image size
-            train_envs (List[str]): list of training environments
-            val_envs (List[str]): list of validation environments
         """
         super().__init__(**kwargs)
         self.dataset_dir = dataset_dir
         self.HW = HW
-        self.train_envs = train_envs
-        self.val_envs = val_envs
 
     def train_transform(self, frame: aloscene.Frame):
         """train transform without augmentation, but crop for multiple of 8"""
@@ -66,11 +60,13 @@ class TartanairDisparityDataLoader(BaseDataLoader):
         return collate
 
     def setup_train_dataloader(self) -> DataLoader:
-        self.train_dataset = TartanairDataset(
+        self.train_dataset = KittiStereo2015(
             dataset_dir=self.dataset_dir,
-            envs=self.train_envs,
+            subset="train",
+            sequence_start=10,
+            sequence_end=10,
             cameras=["left", "right"],
-            labels=["disparity"],
+            labels=["disp_occ"],
         )
         dataloader = DataLoader(
             self.train_dataset,
@@ -83,11 +79,13 @@ class TartanairDisparityDataLoader(BaseDataLoader):
         return dataloader
 
     def setup_val_dataloader(self):
-        self.val_dataset = TartanairDataset(
+        self.val_dataset = KittiStereo2015(
             dataset_dir=self.dataset_dir,
-            envs=self.val_envs,
+            subset="train",  # disparity GT is not available for val split
+            sequence_start=10,
+            sequence_end=10,
             cameras=["left", "right"],
-            labels=["disparity"],
+            labels=["disp_occ"],
         )
         dataloader = DataLoader(
             self.val_dataset,

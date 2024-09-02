@@ -187,11 +187,13 @@ The tool generates a YAML configuration file that includes:
 - [ ] [MobileStereoNet](https://arxiv.org/pdf/2108.09770.pdf)
 - [ ] [SCV-STEREO](https://arxiv.org/pdf/2107.08187.pdf)
 - [ ] [DCVNet](https://arxiv.org/pdf/2103.17271.pdf)
+- [ ] [LightStereo](https://arxiv.org/abs/2406.19833)
 - [ ] [MiDaS](https://arxiv.org/abs/1907.01341)
 - [ ] [ZoeDepth](https://arxiv.org/abs/2302.12288)
 - [ ] [Metric3D](https://jugghm.github.io/Metric3Dv2/)
 - [ ] [Unidepth](https://github.com/lpiccinelli-eth/unidepth)
 - [ ] [DepthAnything](https://arxiv.org/pdf/2401.10891)
+
 
 
 # Acknowledgements
