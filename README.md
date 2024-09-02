@@ -10,7 +10,7 @@ Depth estimation using neural networks is a rapidly evolving field with applicat
 3. Focusing on both monocular and stereo camera-based depth estimation techniques.
 4. Emphasizing lightweight algorithms suitable for real-time execution on edge devices.
 
-Key features:
+🌟 **Key features** :star2:
 - Comprehensive collection of state-of-the-art depth estimation algorithms
 - Consistent implementation and interface across different models
 - Simplified training, inference, and deployment processes
