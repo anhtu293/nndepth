@@ -198,3 +198,4 @@ The tool generates a YAML configuration file that includes:
 
 # Acknowledgements
 - [CreStereo](https://github.com/megvii-research/CREStereo)
+- [RAFTStereo](https://github.com/princeton-vl/RAFT-Stereo/blob/main/evaluate_stereo.py#L13)
