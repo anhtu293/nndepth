@@ -1,7 +1,0 @@
-context_dim: 64
-corr_levels: 4
-corr_radius: 4
-hidden_dim: 128
-include_preprocessing: false
-iters: 12
-tracing: false

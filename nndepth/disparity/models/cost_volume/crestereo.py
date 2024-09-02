@@ -1,6 +1,6 @@
 import torch
 from typing import List, Tuple
-from nndepth.disparity.utils import bilinear_sampler, coords_grid, manual_pad
+from nndepth.disparity.models.utils import bilinear_sampler, coords_grid, manual_pad
 
 
 class AGCL:

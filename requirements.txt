@@ -7,5 +7,8 @@ flake8_black>=0.2.3
 black>=21.7
 pydocstyle>=6.1.1
 numpy==1.23.5
+accelerate==0.33.0
+loguru==0.7.2
+tabulate==0.9.0
 open3d
 pyquaternion

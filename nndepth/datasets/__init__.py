@@ -1,1 +1,2 @@
 from nndepth.datasets.tartanair_dataset import TartanairDataset
+from nndepth.datasets.kitti_stereo_2015 import KittiStereo2015

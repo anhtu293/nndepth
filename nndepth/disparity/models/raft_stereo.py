@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Union, Tuple
+from typing import Dict, Union, Tuple, List
 
 import aloscene
 
@@ -74,30 +74,6 @@ class RAFTStereo(nn.Module):
     def _init_update_block(self):
         raise NotImplementedError("Must be implemented in child class")
 
-    def _preprocess_input(self, frame1: aloscene.Frame, frame2: aloscene.Frame):
-        if self.tracing:
-            assert isinstance(frame1, torch.Tensor)
-            assert isinstance(frame2, torch.Tensor)
-            if self.include_preprocessing:
-                assert (frame1.ndim == 3) and (frame2.ndim == 3)
-                frame1 = frame1.permute(2, 0, 1)
-                frame2 = frame2.permute(2, 0, 1)
-
-                frame1 = frame1.unsqueeze(0)
-                frame2 = frame2.unsqueeze(0)
-
-                frame1 = frame1 / 255 * 2 - 1
-                frame2 = frame2 / 255 * 2 - 1
-
-            assert (frame1.ndim == 4) and (frame2.ndim == 4)
-        else:
-            for frame in [frame1, frame2]:
-                assert frame.normalization == "minmax_sym"
-                assert frame.names == ("B", "C", "H", "W")
-            frame1 = frame1.as_tensor()
-            frame2 = frame2.as_tensor()
-        return frame1, frame2
-
     def freeze_bn(self):
         for m in self.modules():
             if isinstance(m, nn.BatchNorm2d):
@@ -149,9 +125,7 @@ class RAFTStereo(nn.Module):
         """Forward in backbone. This method must return fmap1, fmap2, cnet1 and guide_features"""
         raise NotImplementedError("Must be implemented in child class")
 
-    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, **kwargs):
-        frame1, frame2 = self._preprocess_input(frame1, frame2)
-
+    def forward(self, frame1: torch.Tensor, frame2: torch.Tensor, **kwargs):
         # forward backbone. This method must return fmap1, fmap2, cnet
         fmap1, fmap2, cnet1 = self.forward_fnet(frame1, frame2)
         fnet_ds = frame1.shape[-1] // fmap1.shape[-1]
@@ -185,6 +159,9 @@ class RAFTStereo(nn.Module):
 class BaseRAFTStereo(RAFTStereo):
     """Original RAFT Stereo presented in the paper"""
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def _init_fnet(self):
         return BasicEncoder(output_dim=self.fnet_dim)
 
@@ -204,8 +181,53 @@ class BaseRAFTStereo(RAFTStereo):
 
 
 class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
-    def __init__(self, num_groups: int = 4, weights: str = None, strict_load: bool = True, **kwargs):
+    def __init__(
+        self,
+        num_groups: int = 4,
+        downsample_ratios: List[Tuple[int, int]] = [[2, 2], [2, 2], [2, 2], [2, 2]],
+        ffn_exp_ratios: List[float] = [1.0, 3.0, 3.0, 4.0],
+        num_blocks_per_stage: List[int] = [4, 4, 6, 2],
+        patch_size: int = 7,
+        stem_strides: List[int] = [[2, 2], [2, 2], [1, 1]],
+        token_mixer_types: List[str] = ["repmixer", "repmixer", "repmixer", "attention"],
+        use_ffn_per_stage: List[bool] = [False, True, True, True],
+        width_multipliers: List[float] = [1.0, 1.0, 1.0, 1.0],
+        weights: str = None,
+        strict_load: bool = True,
+        **kwargs
+    ):
+        """
+        Coarse2FineGroupRepViTRAFTStereo
+
+        Args:
+            num_groups (int): Number of groups. Default is 4.
+            downsample_ratios (List[Tuple[int, int]]): Downsample ratios. Default is [[2, 2], [2, 2], [2, 2], [2, 2]].
+            ffn_exp_ratios (List[float]): Feed-forward expansion ratios. Default is [1.0, 3.0, 3.0, 4.0].
+            num_blocks_per_stage (List[int]): Number of blocks per stage. Default is [4, 4, 6, 2].
+            patch_size (int): Patch size. Default is 7.
+            stem_strides (List[int]): Stem strides. Default is [[2, 2], [2, 2], [1, 1]].
+            token_mixer_types (List[str]): Token mixer types.
+                Default is ["repmixer", "repmixer", "repmixer", "attention"].
+            use_ffn_per_stage (List[bool]): Use feed-forward network per stage. Default is [False, True, True, True].
+            width_multipliers (List[float]): Width multipliers. Default is [1.0, 1.0, 1.0, 1.0].
+            weights (str): Weights. Default is None.
+            strict_load (bool): Strict load. Default is True.
+            **kwargs: Additional keyword arguments.
+
+            For `num_groups`, `downsample_ratios`, `ffn_exp_ratios`, `num_blocks_per_stage`, `stem_strides`,
+                `token_mixer_types`, `use_ffn_per_stage`, `width_multipliers`,
+                Please refer to `nndepth.extractors.rep_vit.RepViT` for detail implementation.
+        """
         self.num_groups = num_groups
+        self.downsample_ratios = downsample_ratios
+        self.ffn_exp_ratios = ffn_exp_ratios
+        self.num_blocks_per_stage = num_blocks_per_stage
+        self.patch_size = patch_size
+        self.stem_strides = stem_strides
+        self.token_mixer_types = token_mixer_types
+        self.use_ffn_per_stage = use_ffn_per_stage
+        self.width_multipliers = width_multipliers
+
         super().__init__(**kwargs)
         assert self.corr_levels == 1, "Corr level must be 1 in Coarse2FineGroupRepViTRaftStereo"
         self.corr_fn = GroupCorrBlock1D
@@ -228,7 +250,16 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
             load_weights(self, weights=self.weights, strict_load=self.strict_load)
 
     def _init_fnet(self, **kwargs):
-        return RepViT(**kwargs)
+        return RepViT(
+            downsample_ratios=self.downsample_ratios,
+            ffn_exp_ratios=self.ffn_exp_ratios,
+            num_blocks_per_stage=self.num_blocks_per_stage,
+            patch_size=self.patch_size,
+            stem_strides=self.stem_strides,
+            token_mixer_types=self.token_mixer_types,
+            use_ffn_per_stage=self.use_ffn_per_stage,
+            width_multipliers=self.width_multipliers,
+        )
 
     def _init_update_block(self):
         return BasicUpdateBlock(
@@ -255,9 +286,8 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
         up_disp = up_disp.permute(0, 1, 4, 2, 5, 3)
         return up_disp.reshape(N, 1, rate[0] * H, rate[1] * W)
 
-    def forward(self, frame1: aloscene.Frame, frame2: aloscene.Frame, **kwargs):
+    def forward(self, frame1: torch.Tensor, frame2: torch.Tensor, **kwargs):
         B = frame1.shape[0]
-        frame1, frame2 = self._preprocess_input(frame1, frame2)
 
         features = self.fnet(torch.cat([frame1, frame2], axis=0))[::2]
         features = features[::-1]

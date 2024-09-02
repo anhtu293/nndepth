@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 import os
-from typing import List, Union, Callable
+from loguru import logger
+from typing import List, Tuple, Dict
 
-from alodataset import BaseDataset, SequenceMixin
 import aloscene
 
 from nndepth.datasets.utils.geometry_trans import pos_quat2SE
@@ -19,51 +19,59 @@ def sequence_indices(n_samples, seq_size, seq_skip):
         yield sequence_index(start, seq_size)
 
 
-class TartanairDataset(BaseDataset, SequenceMixin):
-    """
-    TartanAirDataset
-
-    Parameters
-    ----------
-
-    sequences : list
-        list of tuple of the following format [environment]
-    cameras : list of string
-        One frame is returned for each camera.
-        Possible cameras : {'left'}.
-    labels : list
-        Labels that will be attached to the frame
-        Possible labels : {'disp', 'disp_occ', 'flow', 'flow_occ'}
-    pose_format : {"NED", "camera"}
-        "NED" (default) : original NED format from tartanair dataset
-        "camera" : our camera coordinate system (x=right, y=down, z=infront)
-    **kwargs :
-        aloscene.BaseDataset parameters
-    """
+class TartanairDataset(object):
 
     CAMERAS = ["left", "right"]
-    LABELS = ["disp", "depth", "segmentation"]
+    LABELS = ["disparity", "depth", "segmentation"]
+
+    LOADING_RETRY_LIMIT = 10
 
     def __init__(
         self,
+        dataset_dir: str = "/data/tartanair",
         envs: List[str] = None,
-        sequences: List[str] = None,
+        sequences: Dict[str, List[str]] = None,
         cameras: List[str] = None,
         labels: List[str] = None,
+        sequence_size: int = 1,
+        sequence_skip: int = 0,
         start_from: int = 0,
         pose_format: str = "NED",
-        get_cameras_fn: Callable = None,
-        **kwargs,
     ):
-        super().__init__(name="TartanAir", **kwargs)
+        """
+        Dataset for Tartanair dataset
+
+        Args:
+            dataset_dir (str): path to the dataset
+            envs (List[str]): list of environments
+            sequences (Dict[str, List[str])]: list of sequences per evironment
+            cameras (List[str]): list of cameras
+            labels (List[str]): list of labels
+            sequence_size (int): size of the sequence
+            sequence_skip (int): skip between sequences
+            start_from (int): start from
+            pose_format (str): pose format
+            get_cameras_fn (Callable): function to get cameras
+
+        Returns:
+            None
+        """
+        super().__init__()
+        assert os.path.exists(dataset_dir), f"Dataset directory {dataset_dir} does not exist"
+        assert pose_format in ["NED", "camera"], "pose_format should be in {'NED', 'camera'}"
+        assert cameras is None or all([cam in self.CAMERAS for cam in cameras]), f"cameras should be in {self.CAMERAS}"
+        assert labels is None or all([label in self.LABELS for label in labels]), f"labels should be in {self.LABELS}"
+
+        self.dataset_dir = dataset_dir
         self.envs = envs
         self.sequences = sequences
         self.cameras = cameras if cameras is not None else self.CAMERAS
         self.labels = labels if labels is not None else self.LABELS
+        self.sequence_size = sequence_size
+        self.sequence_skip = sequence_skip
         self.start_from = start_from
         self.images_format = "png"
         self.items = {}
-        self.get_cameras_fn = get_cameras_fn
 
         if pose_format not in ["NED", "camera"]:
             raise ValueError("pose_format should be in {'NED', 'camera'}")
@@ -100,13 +108,7 @@ class TartanairDataset(BaseDataset, SequenceMixin):
                 }
             )
 
-            # remove last item
-            if "flow" in self.labels or "flow_occ" in self.labels:
-                if self.skip != 0:
-                    print("[WARNING][tartandataset] Flow label is loaded, but skip != 0.")
-                del self.items[len(self.items) - 1]
-
-    def _load_camera_poses(self, data_dir):
+    def _load_camera_poses(self, data_dir: str) -> Tuple[np.ndarray, np.ndarray]:
         # Open the cameras positions
         with open(os.path.join(data_dir, "pose_left.txt"), "r") as f:
             pose_left = np.array(
@@ -126,30 +128,28 @@ class TartanairDataset(BaseDataset, SequenceMixin):
             )
         return pose_left, pose_right
 
-    def _get_envs(self):
+    def _get_envs(self) -> List[str]:
         environments = []
         for env in sorted(os.listdir(self.dataset_dir)):
             if not env.endswith(".zip") and env != "tartanair_tools":
                 environments.append(env)
         return environments
 
-    def _get_sequences(self, env):
+    def _get_sequences(self, env: str) -> List[str]:
         diff_dir = os.path.join(self.dataset_dir, env, env, "Easy")
         all_sequences = os.listdir(diff_dir)
         all_sequences = [
             seq for seq in all_sequences if os.path.isdir(os.path.join(self.dataset_dir, env, env, "Easy", seq))
         ]
-        if self.sequences is not None:
-            idx = self.envs.index(env)
-            sequences = self.sequences[idx]
+        if self.sequences is not None and env in self.sequences:
+            sequences = self.sequences[env]
             sequences = [seq for seq in sequences if seq in all_sequences]
         else:
             sequences = all_sequences
         return sorted(sequences)
 
-    def _get_items(self, envs):
-        if envs is None:
-            envs = self._get_envs()
+    def _get_items(self, envs: List[str]) -> List[Tuple[str, str, str]]:
+        envs = self._get_envs() if envs is None else envs
 
         env_seq_level = []
         for env in envs:
@@ -157,7 +157,7 @@ class TartanairDataset(BaseDataset, SequenceMixin):
             env_seq_level.extend([[env, seq, "Easy"] for seq in seqs])
         return env_seq_level
 
-    def get_frame(self, side, sub_sequence_folder, frame_id):
+    def get_frame(self, side: str, sub_sequence_folder: str, frame_id: int) -> aloscene.Frame:
         # Frame + Camera Intrinsic
         frame_left_path = os.path.join(sub_sequence_folder, f"image_{side}", f"{frame_id:06d}_{side}.png")
         frame = aloscene.Frame(frame_left_path, camera_side=side, baseline=0.25)
@@ -185,8 +185,8 @@ class TartanairDataset(BaseDataset, SequenceMixin):
             depth.append_cam_intrinsic(intrinsic)
             frame.append_depth(depth)
 
-        # load disp from depth
-        if "disp" in self.labels and side == "left":
+        # load disparity from depth
+        if "disparity" in self.labels and side == "left":
             depth_path = os.path.join(
                 sub_sequence_folder,
                 f"depth_{side}",
@@ -224,55 +224,64 @@ class TartanairDataset(BaseDataset, SequenceMixin):
 
         return frame
 
-    def NED2camera(self, P):
+    def NED2camera(self, P: np.ndarray) -> np.ndarray:
         T = np.array([[0, 1, 0, 0], [0, 0, 1, 0], [1, 0, 0, 0], [0, 0, 0, 1]], dtype=np.float32)
         T_inv = np.linalg.inv(T)
         return T @ P @ T_inv
 
-    def getitem(self, idx):
-        sequence_data = self.items[idx]
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        nb_retry = 0
+        while nb_retry < self.LOADING_RETRY_LIMIT:
+            try:
+                sequence_data = self.items[idx]
 
-        env = sequence_data["env"]
-        seq = sequence_data["sequence"]
-        difficulty = sequence_data["level"]
+                env = sequence_data["env"]
+                seq = sequence_data["sequence"]
+                difficulty = sequence_data["level"]
 
-        sub_sequence_folder = os.path.join(
-            self.dataset_dir,
-            sequence_data["env"],
-            sequence_data["env"],
-            sequence_data["level"],
-            sequence_data["sequence"],
-        )
+                sub_sequence_folder = os.path.join(
+                    self.dataset_dir,
+                    sequence_data["env"],
+                    sequence_data["env"],
+                    sequence_data["level"],
+                    sequence_data["sequence"],
+                )
 
-        target_cameras = self.cameras if self.get_cameras_fn is None else self.get_cameras_fn()
-        frames = {side: [] for side in target_cameras}
+                frames = {side: [] for side in self.cameras}
 
-        sequence_name = f"{env}-{difficulty}-{seq}"
+                sequence_name = f"{env}-{difficulty}-{seq}"
 
-        temporal_sequence = sequence_data["temporal_sequence"]
+                temporal_sequence = sequence_data["temporal_sequence"]
+                for el in temporal_sequence:
+                    left_pose = self.sequence_to_camera_pos[sequence_name]["pose_left"][el]
+                    left_pose = pos_quat2SE(left_pose)
+                    if self.pose_format == "camera":
+                        left_pose = self.NED2camera(left_pose)
 
-        for el in temporal_sequence:
-            left_pose = self.sequence_to_camera_pos[sequence_name]["pose_left"][el]
-            left_pose = pos_quat2SE(left_pose)
-            if self.pose_format == "camera":
-                left_pose = self.NED2camera(left_pose)
+                    right_pose = self.sequence_to_camera_pos[sequence_name]["pose_right"][el]
+                    right_pose = pos_quat2SE(right_pose)
+                    if self.pose_format == "camera":
+                        right_pose = self.NED2camera(right_pose)
 
-            right_pose = self.sequence_to_camera_pos[sequence_name]["pose_right"][el]
-            right_pose = pos_quat2SE(right_pose)
-            if self.pose_format == "camera":
-                right_pose = self.NED2camera(right_pose)
+                    poses = {"left": left_pose, "right": right_pose}
+                    for side in self.cameras:
+                        frame = self.get_frame(side, sub_sequence_folder, el)
+                        P = aloscene.Pose(torch.as_tensor(poses[side], dtype=torch.float32))
+                        frame.append_pose(P)
+                        frames[side].append(frame.temporal())
 
-            poses = {"left": left_pose, "right": right_pose}
-            for side in target_cameras:
-                frame = self.get_frame(side, sub_sequence_folder, el)
-                P = aloscene.Pose(torch.as_tensor(poses[side], dtype=torch.float32))
-                frame.append_pose(P)
-                frames[side].append(frame.temporal())
+                for side in frames:
+                    frames[side] = torch.cat(frames[side], dim=0)
 
-        for side in frames:
-            frames[side] = torch.cat(frames[side], dim=0)
-
-        return frames
+                return frames
+            except Exception as e:
+                nb_retry += 1
+                idx = (idx + 1) % len(self.items)
+                logger.info(
+                    f"Error while loading sequence {sequence_name} - Idx {idx}: {e}. Retry with sequence {idx}"
+                )
+        logger.error(Exception("Error while loading data. Retry limit reached"))
+        return None
 
     def __len__(self):
         return len(self.items)
@@ -280,17 +289,20 @@ class TartanairDataset(BaseDataset, SequenceMixin):
 
 if __name__ == "__main__":
     from aloscene.renderer import Renderer
+    import cv2
 
     dataset = TartanairDataset(
+        dataset_dir="/data/tartanair",
         sequence_size=1,
         sequence_skip=2,
-        labels=["depth_left"],
+        labels=["depth"],
         envs=["abandonedfactory"],
         sequences=[["P001"]],
     )
 
-    for frame in dataset.stream_loader():
-        left_view = frame["left"].get_view()
-        right_view = frame["right"].get_view()
-        Renderer().render([left_view, right_view], renderer="matplotlib")
-        break
+    frame = dataset[100]
+
+    left_view = frame["left"].get_view()
+    right_view = frame["right"].get_view()
+    Renderer().render([left_view, right_view], renderer="cv")
+    cv2.waitKey(0)

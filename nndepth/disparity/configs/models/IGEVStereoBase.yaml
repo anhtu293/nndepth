@@ -1,0 +1,29 @@
+# IGEVStereoBase configuration file 
+
+name: IGEVStereoBase 
+# IGEVStereoBase 
+# 
+#         Initialize the IGEVStereoBase model.
+# 
+#         Args:
+#             update_cls (str): The class name of the update block to use. Default is "basic_update_block".
+#             cv_groups (int): The number of groups to split the cost volume into. Default is 8.
+#             hidden_dim (int): The hidden dimension of the update block. Default is 128.
+#             context_dim (int): The context dimension of the update block. Default is 128.
+#             corr_levels (int): The number of correlation levels to compute. Default is 4.
+#             corr_radius (int): The radius of the correlation window. Default is 4.
+#             tracing (bool): Whether to enable tracing for ONNX exportation. Default is False.
+#             include_preprocessing (bool): Whether to include preprocessing steps in tracing. Default is False.
+#          
+update_cls: basic_update_block
+cv_groups: 8
+iters: 12
+hidden_dim: 128
+context_dim: 128
+corr_levels: 4
+corr_radius: 4
+tracing: false
+include_preprocessing: false
+weights: null
+strict_load: true
+

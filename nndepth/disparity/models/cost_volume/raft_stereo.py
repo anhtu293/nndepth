@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-from nndepth.disparity.utils import linear_sampler
+from nndepth.disparity.models.utils import linear_sampler
 
 
 class CorrBlock1D:
