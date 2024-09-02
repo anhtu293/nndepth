@@ -21,6 +21,11 @@ Depth estimation using neural networks is a rapidly evolving field with applicat
 
 This project is built upon [`aloception-oss`](https://github.com/Visual-Behavior/aloception-oss), an open-source package by VisualBehavior. Familiarity with `aloception-oss`, especially `aloscene`, is recommended.
 
+### Clone
+```bash
+git clone --recurse-submodules git@github.com:anhtu293/nndepth.git
+```
+
 ### Docker Installation (Recommended)
 
 The easiest way to set up the working environment is by using Docker. Follow these steps:
