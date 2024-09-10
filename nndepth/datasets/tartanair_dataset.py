@@ -4,8 +4,7 @@ import os
 from loguru import logger
 from typing import List, Tuple, Dict
 
-import aloscene
-
+from nndepth.scene import Frame, Disparity, Depth
 from nndepth.datasets.utils.geometry_trans import pos_quat2SE
 
 
@@ -25,6 +24,9 @@ class TartanairDataset(object):
     LABELS = ["disparity", "depth", "segmentation"]
 
     LOADING_RETRY_LIMIT = 10
+    FX = 320
+    FY = 320
+    BASELINE = 0.25
 
     def __init__(
         self,
@@ -157,17 +159,39 @@ class TartanairDataset(object):
             env_seq_level.extend([[env, seq, "Easy"] for seq in seqs])
         return env_seq_level
 
-    def get_frame(self, side: str, sub_sequence_folder: str, frame_id: int) -> aloscene.Frame:
+    def load_image(self, image_path: str) -> torch.Tensor:
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return torch.Tensor(image.transpose((2, 0, 1)))
+
+    def create_cam_intrinsic(self, fx: float, fy: float, cx: float, cy: float, skew: float) -> torch.Tensor:
+        intrinsic = torch.eye(3)
+        intrinsic[0, 0] = fx
+        intrinsic[1, 1] = fy
+        intrinsic[0, 1] = skew
+        intrinsic[0, 2] = cx
+        intrinsic[1, 2] = cy
+        intrinsic = torch.cat([intrinsic, torch.zeros((3, 1))], dim=1)
+        return intrinsic
+
+    def get_frame(self, side: str, sub_sequence_folder: str, frame_id: int) -> Frame:
         # Frame + Camera Intrinsic
         frame_left_path = os.path.join(sub_sequence_folder, f"image_{side}", f"{frame_id:06d}_{side}.png")
-        frame = aloscene.Frame(frame_left_path, camera_side=side, baseline=0.25)
-        intrinsic = aloscene.CameraIntrinsic(focal_length=320, plane_size=frame.HW)
-        frame.append_cam_intrinsic(intrinsic)
+        image = self.load_image(frame_left_path)
 
-        cam_ext = np.eye(4)
-        cam_ext[1, -1] = -0.125 if side == "left" else 0.125
-        cam_ext = aloscene.CameraExtrinsic(cam_ext)
-        frame.append_cam_extrinsic(cam_ext)
+        cam_extrinsic = np.eye(4)
+        cam_extrinsic[1, -1] = -self.BASELINE / 2 if side == "left" else self.BASELINE / 2
+        cam_intrinsic = self.create_cam_intrinsic(
+            fx=self.FX, fy=self.FY, cx=image.shape[-1] / 2, cy=image.shape[-2] / 2, skew=0
+        )
+
+        frame = Frame(
+            image=image,
+            cam_intrinsic=cam_intrinsic,
+            cam_extrinsic=cam_extrinsic,
+            camera=side,
+            baseline=self.BASELINE
+        )
 
         # Depth
         # right depth is not available for annotation at the moment
@@ -177,13 +201,9 @@ class TartanairDataset(object):
                 f"depth_{side}",
                 f"{frame_id:06d}_{side}_depth.npy",
             )
-            depth = aloscene.Depth(
-                np.expand_dims(np.load(depth_path), axis=0),
-                baseline=0.25,
-                camera_side=side,
-            )
-            depth.append_cam_intrinsic(intrinsic)
-            frame.append_depth(depth)
+            depth = torch.Tensor(np.expand_dims(np.load(depth_path), axis=0))
+            depth = Depth(data=depth)
+            frame.planar_depth = depth
 
         # load disparity from depth
         if "disparity" in self.labels and side == "left":
@@ -192,35 +212,11 @@ class TartanairDataset(object):
                 f"depth_{side}",
                 f"{frame_id:06d}_{side}_depth.npy",
             )
-            depth = aloscene.Depth(
-                np.expand_dims(np.load(depth_path), axis=0),
-                baseline=0.25,
-                camera_side=side,
-            )
-            depth.append_cam_intrinsic(intrinsic)
-            frame.append_disparity(depth.as_disp(camera_side=side).signed())
-
-        # Assume only left is visible. Maybe it is right. we'll check later.
-        if side == "left" and ("flow" in self.labels or "flow_occ" in self.labels):
-            # Optical flow
-            flow_path = os.path.join(
-                sub_sequence_folder,
-                "flow",
-                f"{frame_id:06d}_{frame_id+self.skip+1:06d}_flow.npy",
-            )
-            if os.path.exists(flow_path):
-                flow = np.transpose(np.load(flow_path), [2, 0, 1])
-                flow = aloscene.Flow(flow)
-                if "flow_occ" in self.labels:
-                    mask_path = os.path.join(
-                        sub_sequence_folder,
-                        "flow",
-                        f"{frame_id:06d}_{frame_id+self.skip+1:06d}_mask.npy",
-                    )
-                    mask = np.expand_dims(np.load(mask_path), 0) > 0
-                    occ = aloscene.Mask(mask, names=("N", "H", "W"))
-                    flow.append_occlusion(occ)
-                frame.append_flow(flow, "flow_forward")
+            depth = np.expand_dims(np.load(depth_path), axis=0)
+            disparity = -self.BASELINE * self.FX / (depth + 1e-8)
+            disparity = torch.Tensor(disparity)
+            disparity = Disparity(data=disparity, disp_sign="negative")
+            frame.disparity = disparity
 
         return frame
 
@@ -229,7 +225,7 @@ class TartanairDataset(object):
         T_inv = np.linalg.inv(T)
         return T @ P @ T_inv
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Dict[str, list[torch.Tensor]]:
         nb_retry = 0
         while nb_retry < self.LOADING_RETRY_LIMIT:
             try:
@@ -266,12 +262,9 @@ class TartanairDataset(object):
                     poses = {"left": left_pose, "right": right_pose}
                     for side in self.cameras:
                         frame = self.get_frame(side, sub_sequence_folder, el)
-                        P = aloscene.Pose(torch.as_tensor(poses[side], dtype=torch.float32))
-                        frame.append_pose(P)
-                        frames[side].append(frame.temporal())
-
-                for side in frames:
-                    frames[side] = torch.cat(frames[side], dim=0)
+                        P = torch.as_tensor(poses[side], dtype=torch.float32)
+                        frame.pose = P
+                        frames[side].append(frame)
 
                 return frames
             except Exception as e:
@@ -288,21 +281,31 @@ class TartanairDataset(object):
 
 
 if __name__ == "__main__":
-    from aloscene.renderer import Renderer
     import cv2
 
     dataset = TartanairDataset(
         dataset_dir="/data/tartanair",
         sequence_size=1,
         sequence_skip=2,
-        labels=["depth"],
+        labels=["depth", "disparity"],
         envs=["abandonedfactory"],
         sequences=[["P001"]],
     )
 
     frame = dataset[100]
 
-    left_view = frame["left"].get_view()
-    right_view = frame["right"].get_view()
-    Renderer().render([left_view, right_view], renderer="cv")
+    left_view = frame["left"][0]
+    right_view = frame["right"][0]
+    left_view = left_view.resize((384, 384))
+    print(left_view)
+    depth = left_view.planar_depth
+    disparity = left_view.disparity
+
+    print(depth.data)
+
+    viz_depth = depth.get_view(max=20)
+    viz_disparity = disparity.get_view()
+
+    cv2.imshow("depth", viz_depth)
+    cv2.imshow("disparity", viz_disparity)
     cv2.waitKey(0)
