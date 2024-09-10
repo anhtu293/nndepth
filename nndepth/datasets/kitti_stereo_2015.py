@@ -150,6 +150,15 @@ class KittiStereo2015:
         >>> dataset = KittiStereoFlowSFlow2015(sequence_start=7, sequence_end=11)
         >>> # Load dataset with all the context images
         >>> dataset = KittiStereoFlowSFlow2015(sequence_start=0, sequence_end=20)
+        >>> # Visualize a sample
+        >>> from random import randint
+        >>> import cv2
+        >>> dataset = KittiStereo2015(sequence_start=10, sequence_end=10)
+        >>> obj = dataset[randint(0, len(dataset))]
+        >>> frame = obj["left"][0]
+        >>> disps = torch.stack([frame.disparity, frame.disparity], dim=0)
+        >>> disp_viz = disps.get_view()
+        >>> cv2.imshow("disp", disp_viz[0])
         """
         super().__init__()
         assert subset in ["train", "val"], "subset must be in [`train`, `val`]"
@@ -300,17 +309,3 @@ class KittiStereo2015:
             "right_extrinsic": torch.Tensor(data["T_cam3_rect"]),
         }
         return result
-
-
-if __name__ == "__main__":
-    from random import randint
-
-    dataset = KittiStereo2015(sequence_start=10, sequence_end=10)
-    obj = dataset[randint(0, len(dataset))]
-    frame = obj["left"][0]
-
-    disps = torch.stack([frame.disparity, frame.disparity], dim=0)
-    disp_viz = disps.get_view()
-
-    cv2.imshow("disp", disp_viz[0])
-    cv2.waitKey(0)

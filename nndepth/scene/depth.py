@@ -1,11 +1,10 @@
 import torch
-import torch
 from torch.nn.functional import interpolate, max_pool2d
 from tensordict import tensorclass
 import numpy as np
 import matplotlib
 import matplotlib.cm
-from typing import Optional, Tuple, Literal, Union, List
+from typing import Optional, Tuple, Union, List
 
 
 def maxpool_depth(depth: torch.Tensor, size: Tuple[int, int], **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -76,6 +75,21 @@ def minpool_depth(depth: torch.Tensor, size: Tuple[int, int], **kwargs) -> torch
 
 @tensorclass
 class Depth:
+    """
+    A class representing depth information for a frame in a scene.
+
+    Attributes:
+        data (torch.Tensor): The depth data as a tensor.
+        valid_mask (Optional[torch.Tensor]): A mask indicating valid depth values.
+
+    Methods:
+        resize(size: Tuple[int, int], method: str = "interpolate", **resize_kwargs) -> Depth:
+            Resizes the depth data and valid mask (if present).
+
+    Notes:
+        The depth values are typically in meters, representing the distance from the camera to the object in the scene.
+        The valid_mask, if provided, indicates which depth values are considered valid or reliable.
+    """
     data: torch.Tensor
     valid_mask: Optional[torch.Tensor] = None
 

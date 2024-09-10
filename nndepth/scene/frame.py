@@ -9,6 +9,27 @@ from .depth import Depth
 
 @tensorclass
 class Frame:
+    """
+    A class representing a single frame in a scene.
+
+    Attributes:
+        image (torch.Tensor): The image data as a tensor.
+        disparity (Optional[Disparity]): Disparity information for the frame.
+        planar_depth (Optional[Depth]): Depth map for the frame.
+        cam_intrinsic (Optional[torch.Tensor]): Camera intrinsic parameters.
+        cam_extrinsic (Optional[torch.Tensor]): Camera extrinsic parameters.
+        pose (Optional[torch.Tensor]): Pose of the frame.
+        baseline (Optional[float]): Baseline distance for stereo setups.
+        camera (Optional[str]): Identifier for the camera used.
+
+    Methods:
+        resize(size: Tuple[int, int], align_corners=True,
+               disparity_resize_method: str = "interpolate",
+               depth_resize_method: str = "interpolate",
+               disparity_resize_kwargs: dict = {},
+               depth_resize_kwargs: dict = {}) -> Frame:
+            Resizes the frame's image, disparity, and depth data.
+    """
     image: torch.Tensor
     disparity: Optional[Disparity] = None
     planar_depth: Optional[Depth] = None

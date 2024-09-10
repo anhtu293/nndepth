@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import os
+import cv2
 from loguru import logger
 from typing import List, Tuple, Dict
 
@@ -18,7 +19,7 @@ def sequence_indices(n_samples, seq_size, seq_skip):
         yield sequence_index(start, seq_size)
 
 
-class TartanairDataset(object):
+class TartanairDataset:
 
     CAMERAS = ["left", "right"]
     LABELS = ["disparity", "depth", "segmentation"]
@@ -43,7 +44,8 @@ class TartanairDataset(object):
         """
         Dataset for Tartanair dataset
 
-        Args:
+        Parameters
+        ----------
             dataset_dir (str): path to the dataset
             envs (List[str]): list of environments
             sequences (Dict[str, List[str])]: list of sequences per evironment
@@ -55,8 +57,31 @@ class TartanairDataset(object):
             pose_format (str): pose format
             get_cameras_fn (Callable): function to get cameras
 
-        Returns:
+        Returns
+        -------
             None
+
+        Examples
+        --------
+        >>> import cv2
+        >>> dataset = TartanairDataset(
+                dataset_dir="/data/tartanair",
+                sequence_size=1,
+                sequence_skip=2,
+                labels=["depth", "disparity"],
+                envs=["abandonedfactory"],
+                sequences=[["P001"]],
+            )
+        >>> frame = dataset[100]
+        >>> left_frame = frame["left"][0]
+        >>> image_left = left_frame.image.numpy().transpose((1, 2, 0)).astype(np.uint8)
+        >>> depth = left_frame.planar_depth
+        >>> disparity = left_frame.disparity
+        >>> viz_depth = depth.get_view(max=20)
+        >>> viz_disparity = disparity.get_view()
+        >>> cv2.imshow("image", image_left)
+        >>> cv2.imshow("depth", viz_depth)
+        >>> cv2.imshow("disparity", viz_disparity)
         """
         super().__init__()
         assert os.path.exists(dataset_dir), f"Dataset directory {dataset_dir} does not exist"
@@ -278,34 +303,3 @@ class TartanairDataset(object):
 
     def __len__(self):
         return len(self.items)
-
-
-if __name__ == "__main__":
-    import cv2
-
-    dataset = TartanairDataset(
-        dataset_dir="/data/tartanair",
-        sequence_size=1,
-        sequence_skip=2,
-        labels=["depth", "disparity"],
-        envs=["abandonedfactory"],
-        sequences=[["P001"]],
-    )
-
-    frame = dataset[100]
-
-    left_view = frame["left"][0]
-    right_view = frame["right"][0]
-    left_view = left_view.resize((384, 384))
-    print(left_view)
-    depth = left_view.planar_depth
-    disparity = left_view.disparity
-
-    print(depth.data)
-
-    viz_depth = depth.get_view(max=20)
-    viz_disparity = disparity.get_view()
-
-    cv2.imshow("depth", viz_depth)
-    cv2.imshow("disparity", viz_disparity)
-    cv2.waitKey(0)

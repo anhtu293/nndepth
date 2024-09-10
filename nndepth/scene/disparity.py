@@ -88,6 +88,25 @@ def minpool_disp(disp: torch.Tensor, size: Tuple[int, int], disp_sign: str, **kw
 
 @tensorclass
 class Disparity:
+    """
+    A class representing disparity information for a frame in a scene.
+
+    Attributes:
+        data (torch.Tensor): The disparity data as a tensor.
+        disp_sign (Literal["negative", "positive"]): The sign convention for the disparity values.
+            "negative" means disparity increases as depth decreases (typical for left-to-right stereo).
+            "positive" means disparity increases as depth increases (typical for right-to-left stereo).
+        occlusion (Optional[torch.Tensor]): A mask indicating occluded areas in the disparity map.
+
+    Methods:
+        resize(size: Tuple[int, int], method: str = "interpolate", **resize_kwargs) -> Disparity:
+            Resizes the disparity data and occlusion mask (if present).
+
+    Notes:
+        Disparity is inversely proportional to depth. It represents the pixel offset between
+        corresponding points in a stereo image pair. The disparity sign convention is important
+        for correct interpretation and processing of the disparity data.
+    """
     data: torch.Tensor
     disp_sign: Literal["negative", "positive"] = "negative"
     occlusion: Optional[torch.Tensor] = None
