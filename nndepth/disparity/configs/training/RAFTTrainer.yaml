@@ -39,7 +39,7 @@ gradient_accumulation_steps: 2
 workdir: /weights
 project_name: raft_stereo
 experiment_name: BaseRaftStereo
-val_interval: 0.25
+val_interval: 10
 log_interval: 50
-num_val_samples: -1
+num_val_samples: 10
 save_best_k_cp: 3

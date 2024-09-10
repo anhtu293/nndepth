@@ -176,7 +176,7 @@ class Depth:
             depth = self.data.clone()
             if self.valid_mask is not None:
                 depth[self.valid_mask != 1] = 0
-            depth = depth.permute([1, 2, 0]).numpy()
+            depth = depth.permute([1, 2, 0]).cpu().numpy()
             depth = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(depth)
             if reverse:
                 depth = 1 - depth
@@ -188,7 +188,7 @@ class Depth:
                 depth = self.data[i].clone()
                 if self.valid_mask is not None:
                     depth[self.valid_mask[i] != 1] = 0
-                depth = depth.permute([1, 2, 0]).numpy()
+                depth = depth.permute([1, 2, 0]).cpu().numpy()
                 depth = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(depth)
                 if reverse:
                     depth = 1 - depth

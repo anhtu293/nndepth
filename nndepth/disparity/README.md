@@ -91,7 +91,7 @@ Detail configuration for each model & training dataset are in [next section](#5-
 
 ### inference
 ```bash
-python nndepth/disparity/inference.py --model_config PATH_TO_MODEL_CONFIG_YAML --weights  PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image
+python nndepth/disparity/inference.py --model_config PATH_TO_MODEL_CONFIG_YAML --weights  PATH_TO_CHECKPOINT --left_path samples/stereo/left/ --right_path samples/stereo/right/ --HW 480 640  --output test --save_format image --viz_hw 480 640
 ```
 ### Evaluation
 - **Kitti Stereo 2015**

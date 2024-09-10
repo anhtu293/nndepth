@@ -45,7 +45,10 @@ def maxpool_disp(
     if disp_sign == "negative":
         new_disp *= -1
     if new_disp.shape[-2] != size[0] or new_disp.shape[-1] != size[1]:
-        new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
+        if len(new_disp.shape) == 3:
+            new_disp = interpolate(new_disp[None], size=size, mode="bilinear", **kwargs)[0]
+        elif len(new_disp.shape) == 4:
+            new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
     return new_disp, indices
 
 
@@ -82,7 +85,10 @@ def minpool_disp(disp: torch.Tensor, size: Tuple[int, int], disp_sign: str, **kw
     if disp_sign == "negative":
         new_disp *= -1
     if new_disp.shape[-2] != size[0] or new_disp.shape[-1] != size[1]:
-        new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
+        if len(new_disp.shape) == 3:
+            new_disp = interpolate(new_disp[None], size=size, mode="bilinear", **kwargs)[0]
+        elif len(new_disp.shape) == 4:
+            new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
     return new_disp, indices
 
 
@@ -201,7 +207,7 @@ class Disparity:
         if len(self.batch_size) == 0:
             disp = self.data.abs()
             disp[self.occlusion == 1] = 0
-            disp = disp.permute([1, 2, 0]).numpy()
+            disp = disp.permute([1, 2, 0]).cpu().numpy()
             disp = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(disp)
             if reverse:
                 disp = 1 - disp
@@ -212,7 +218,7 @@ class Disparity:
             for i in range(self.batch_size[0]):
                 disp = self.data[i].abs()
                 disp[self.occlusion[i] == 1] = 0
-                disp = disp.permute([1, 2, 0]).numpy()
+                disp = disp.permute([1, 2, 0]).cpu().numpy()
                 disp = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(disp)
                 if reverse:
                     disp = 1 - disp

@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from typing import Dict
 
-import aloscene
 
 
 class PydNet(nn.Module):
@@ -39,11 +38,8 @@ class PydNet(nn.Module):
             nn.Conv2d(in_channels=32, out_channels=8, kernel_size=3, stride=1, padding=1),
         )
 
-    def _assert_process(self, frame: aloscene.Frame):
-        raise NotImplementedError
-
     def forward_enc(self, frame: torch.Tensor):
         raise NotImplementedError
 
-    def forward(self, frame: aloscene.Frame):
+    def forward(self, frame: torch.Tensor):
         raise NotImplementedError

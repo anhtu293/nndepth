@@ -11,8 +11,7 @@ from tqdm import tqdm
 import wandb
 from typing import Optional, Tuple, Callable, Dict
 
-import aloscene
-
+from nndepth.scene import Frame, Disparity
 from nndepth.utils.base_trainer import BaseTrainer
 from nndepth.utils.trackers.wandb import WandbTracker
 
@@ -57,8 +56,9 @@ class RAFTTrainer(BaseTrainer):
         self.accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
         self.is_prepared = False
 
+    @torch.no_grad()
     def predict_and_get_visualization(
-        self, model: nn.Module, sample: Dict[str, aloscene.Frame]
+        self, model: nn.Module, sample: Dict[str, Frame]
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Get visualization of 1 example for debugging purposes
@@ -72,7 +72,7 @@ class RAFTTrainer(BaseTrainer):
         """
 
         def get_disp_image(
-            disp: aloscene.Disparity, min_disp: Optional[float] = None, max_disp: Optional[float] = None
+            disp: Disparity, min_disp: Optional[float] = None, max_disp: Optional[float] = None
         ) -> np.ndarray:
             disp_image = disp.__get_view__(min_disp=min_disp, max_disp=max_disp, cmap="magma").image
             disp_image = (disp_image * 255).astype(np.uint8)
@@ -82,40 +82,34 @@ class RAFTTrainer(BaseTrainer):
             left_frame, right_frame = sample["left"], sample["right"]
         else:
             left_frame, right_frame = sample["left"][:1], sample["right"][:1]
-        left_tensor, right_tensor = left_frame.as_tensor(), right_frame.as_tensor()
+        left_tensor, right_tensor = left_frame.image, right_frame.image
         m_outputs = model(left_tensor, right_tensor)
         disp_pred = m_outputs[-1]["up_disp"][0]
-        disp_pred = aloscene.Disparity(disp_pred, camera_side="left", disp_format="signed", names=("C", "H", "W"))
+        disp_pred = Disparity(data=disp_pred, disp_sign="negative")
 
-        left_image = left_frame.norm255().as_tensor().cpu().numpy().squeeze().transpose(1, 2, 0).astype(np.uint8)
+        left_image = left_frame.image.cpu().numpy().squeeze().transpose(1, 2, 0)
+        left_image = (left_image * 127.5 + 127.5).astype(np.uint8)
         disp_gt = left_frame.disparity[0]
-        disp_gt.names = ("C", "H", "W")  # Set names to avoid error in resize
-        disp_gt = disp_gt.resize(disp_pred.shape[-2:], mode="nearest")
-        min_disp, max_disp = 0, disp_gt.abs().max().item()
+        disp_gt = disp_gt.resize(disp_pred.data.shape[-2:], method="maxpool")
+        min_disp, max_disp = 0, disp_gt.data.abs().max().item()
 
-        disp_gt_image = get_disp_image(disp_gt, min_disp, max_disp)
-        disp_pred_image = get_disp_image(disp_pred, min_disp, max_disp)
+        disp_gt_image = disp_gt.get_view(min=min_disp, max=max_disp, cmap="magma")
+        disp_pred_image = disp_pred.get_view(min=min_disp, max=max_disp, cmap="magma")
 
         return left_image, disp_gt_image, disp_pred_image
 
-    def assert_input(self, left_frame: aloscene.Frame, right_frame: aloscene.Frame):
+    def assert_input(self, left_frame: Frame, right_frame: Frame):
         """
         Assert the input frames
 
         Args:
-            left_frame (aloscene.Frame): left frame
-            right_frame (aloscene.Frame): right frame
+            left_frame (Frame): left frame
+            right_frame (Frame): right frame
         """
         assert left_frame.disparity is not None, "Left frame must have disparity"
-        assert (
-            left_frame.normalization == "minmax_sym" and right_frame.normalization == "minmax_sym"
-        ), f"frames must be minmax_sym normalized. Found {left_frame.normalization} and {right_frame.normalization}"
-        assert left_frame.names == ("B", "C", "H", "W") and right_frame.names == (
-            "B",
-            "C",
-            "H",
-            "W",
-        ), "frames must have names ('B', 'C', 'H', 'W'). Found {left_frame.names} and {right_frame.names}"
+        assert len(left_frame.batch_size) != 0 and len(right_frame.batch_size) != 0, (
+            "The input must have B,C,H,W format"
+        )
 
     def prepare(
         self,
@@ -214,11 +208,11 @@ class RAFTTrainer(BaseTrainer):
                     left_frame, right_frame = batch["left"], batch["right"]
                     self.assert_input(left_frame, right_frame)
 
-                    left_tensor, right_tensor = left_frame.as_tensor(), right_frame.as_tensor()
+                    left_tensor, right_tensor = left_frame.image, right_frame.image
 
                     # Forward
                     m_outputs = model(left_tensor, right_tensor)
-                    disp_gt = left_frame.disparity.as_tensor()
+                    disp_gt = left_frame.disparity.data
                     loss, metrics = criterion(disp_gt, m_outputs)
 
                     # Backward
@@ -349,11 +343,11 @@ class RAFTTrainer(BaseTrainer):
             if self.num_val_samples != -1 and i_batch >= self.num_val_samples:
                 break
             left_frame, right_frame = batch["left"], batch["right"]
-            left_frame, right_frame = left_frame.as_tensor(), right_frame.as_tensor()
+            left_tensor, right_tensor = left_frame.image, right_frame.image
 
             # Forward
-            m_outputs = model(left_frame, right_frame)
-            disp_gt = left_frame.disparity.as_tensor()
+            m_outputs = model(left_tensor, right_tensor)
+            disp_gt = left_frame.disparity.data
             loss, metrics = criterion(disp_gt, m_outputs)
 
             # Metrics
