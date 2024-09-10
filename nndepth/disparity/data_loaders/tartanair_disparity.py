@@ -1,8 +1,8 @@
+import torch
 from torch.utils.data import RandomSampler, DataLoader
 from typing import List, Tuple
 
-import aloscene
-
+from nndepth.scene import Frame
 from nndepth.utils.base_dataloader import BaseDataLoader
 from nndepth.datasets import TartanairDataset
 
@@ -33,33 +33,33 @@ class TartanairDisparityDataLoader(BaseDataLoader):
         self.train_envs = train_envs
         self.val_envs = val_envs
 
-    def train_transform(self, frame: aloscene.Frame):
-        """train transform without augmentation, but crop for multiple of 8"""
+    def train_transform(self, frame: Frame):
+        """train transform without augmentation"""
         frame = frame.resize(self.HW)
-        frame = frame.norm_minmax_sym()
+        frame.image = (frame.image - 127.5) / 127.5
         return frame
 
-    def val_transform(self, frame: aloscene.Frame):
+    def val_transform(self, frame: Frame):
         frame = frame.resize(self.HW)
-        frame = frame.norm_minmax_sym()
+        frame.image = (frame.image - 127.5) / 127.5
         return frame
 
     def collate_fn(self, subset: str):
         assert subset in ["train", "val"]
 
         def collate(batch):
-            frames = []
+            frames = {"left": [], "right": []}
             transform_fn = self.train_transform if subset == "train" else self.val_transform
             for f in batch:
                 if f is None:
                     continue
-                # Remove temporal dimension
-                frames.append({key: transform_fn(f[key][0]) for key in ["left", "right"]})
+                # Remove temporal dimension & Transform
+                frames["left"].append(transform_fn(f["left"][0]))
+                frames["right"].append(transform_fn(f["right"][0]))
 
-            # Transform list of dict to dict of batched frames
-            # frames will now has following structure:
-            # {"left": aloscene.Frame (B,C,H,W), "right": aloscene.Frame (B,C,H,W)}
-            frames = aloscene.batch_list(frames)
+            # Stack list of tensor to create a batch
+            frames["left"] = torch.stack(frames["left"], dim=0)
+            frames["right"] = torch.stack(frames["right"], dim=0)
 
             return frames
 

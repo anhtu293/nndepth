@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict
-
-import aloscene
 
 from nndepth.extractors.mobilenetv3_encoder import MobilenetV3LargeEncoder
 from nndepth.blocks.update_block import BasicUpdateBlock
@@ -95,21 +92,6 @@ class IGEVStereoBase(nn.Module):
         disp = torch.arange(0, width, dtype=distribution.dtype, device=distribution.device)
         disp = disp.reshape(1, -1, 1, 1)
         return -torch.sum(disp * distribution, dim=1, keepdim=True)
-
-    @torch.no_grad()
-    def inference(self, m_outputs: Dict[str, torch.Tensor], only_last=False):
-        def generate_frame(out_dict):
-            return aloscene.Disparity(
-                out_dict["up_disp"],
-                names=("B", "C", "H", "W"),
-                camera_side="left",
-                disp_format="signed",
-            )
-
-        if only_last:
-            return generate_frame(m_outputs[-1])
-        else:
-            return [generate_frame(out_dict) for out_dict in m_outputs]
 
     def initialize_coords(self, fmap1):
         B, C, H, W = fmap1.shape

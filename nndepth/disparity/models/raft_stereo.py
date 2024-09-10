@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Union, Tuple, List
-
-import aloscene
+from typing import Union, Tuple, List
 
 from nndepth.blocks.conv import MobileOneBlock, FeatureFusionBlock
 from nndepth.extractors.rep_vit import RepViT
@@ -85,21 +83,6 @@ class RAFTStereo(nn.Module):
         _y = torch.zeros([N, 1, H, W], dtype=torch.float32)
         zero_flow = torch.cat((_x, _y), dim=1).to(fmap.device)
         return zero_flow
-
-    @torch.no_grad()
-    def inference(self, m_outputs: Dict[str, torch.Tensor], only_last=False):
-        def generate_frame(out_dict):
-            return aloscene.Disparity(
-                out_dict["up_disp"],
-                names=("B", "C", "H", "W"),
-                camera_side="left",
-                disp_format="signed",
-            )
-
-        if only_last:
-            return generate_frame(m_outputs[-1])
-        else:
-            return [generate_frame(out_dict) for out_dict in m_outputs]
 
     def initialize_coords(self, fmap1):
         B, C, H, W = fmap1.shape

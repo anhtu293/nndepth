@@ -1,15 +1,14 @@
 import os
 import torch
+import torch.nn.functional as F
 import argparse
+import cv2
+import numpy as np
 from tqdm import tqdm
-import matplotlib
 from loguru import logger
 from typing import Tuple
 
-matplotlib.use("TkAgg")
-
-import aloscene
-
+from nndepth.scene import Frame, Disparity
 from nndepth.utils.common import instantiate_with_config_file, load_weights
 
 
@@ -26,7 +25,6 @@ def parse_args():
         required=True,
         help="Path to save output. Directory in case of save_format == image, mp4 file in case of video",
     )
-    parser.add_argument("--render", action="store_true", help="Render results")
     parser.add_argument(
         "--save_format",
         type=str,
@@ -34,18 +32,29 @@ def parse_args():
         default="video",
         help="Which format to save output. image or video are supported. Default: %(default)s",
     )
+    parser.add_argument("--viz_hw", type=int, nargs="+", default=(480, 640), help="Resolution of output image/video")
     args = parser.parse_args()
     return args
 
 
-def preprocess_frame(frame: aloscene.Frame, HW: Tuple[int, int]) -> aloscene.Frame:
-    return frame.resize(HW).norm_minmax_sym().batch()
+def preprocess_frame(frame: torch.Tensor, HW: Tuple[int, int]) -> Frame:
+    frame = frame.unsqueeze(0)
+    # frame = frame.resize(HW)
+    frame = F.interpolate(frame, HW, mode="bilinear")
+    frame = (frame - 127.5) / 127.5
+    return frame
+
+
+def load_image(image_path: str) -> torch.Tensor:
+    image = cv2.imread(image_path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    return image
 
 
 @torch.no_grad()
 def main(args):
     # Instantiate the model
-    model, model_config = instantiate_with_config_file(args.model_config, "nndepth.disparity.models")
+    model, _ = instantiate_with_config_file(args.model_config, "nndepth.disparity.models")
     model = load_weights(model, args.weights, strict_load=True).cuda()
     model.eval()
     logger.info("Model is loaded successfully !")
@@ -68,34 +77,39 @@ def main(args):
 
     logger.info(f"Found {len(left_files)} frames !")
 
-    for idx, (left, right) in tqdm(enumerate(zip(left_files, right_files))):
-        left_frame = preprocess_frame(aloscene.Frame(left), args.HW)
-        right_frame = preprocess_frame(aloscene.Frame(right), args.HW)
+    if args.save_format == "video":
+        writer = cv2.VideoWriter(
+            args.output,
+            cv2.VideoWriter_fourcc(*"MJPG"),
+            15,
+            (args.viz_hw[1] * 2, args.viz_hw[0])
+        )
 
-        left_tensor = left_frame.as_tensor().cuda()
-        right_tensor = right_frame.as_tensor().cuda()
+    for idx, (left, right) in tqdm(enumerate(zip(left_files, right_files))):
+        left_image, right_image = load_image(left), load_image(right)
+        left_frame = preprocess_frame(torch.Tensor(left_image.transpose((2, 0, 1))), args.HW)
+        right_frame = preprocess_frame(torch.Tensor(right_image.transpose((2, 0, 1))), args.HW)
+
+        left_frame = left_frame.cuda()
+        right_frame = right_frame.cuda()
 
         # get model output
-        output = model(left_tensor, right_tensor)
+        output = model(left_frame, right_frame)
 
-        # format output into aloscene.Disparity object
-        disp_pred = aloscene.Disparity(
-                output[-1]["up_disp"].cpu(),
-                names=("B", "C", "H", "W"),
-                camera_side="left",
-                disp_format="signed",
-            )
-        disp_view = disp_pred.get_view(min_disp=None, max_disp=None, cmap="RdYlGn")
+        # format output into Disparity object
+        disp_pred = Disparity(data=output[-1]["up_disp"][0].cpu(), disp_sign="negative")
+        disp_view = disp_pred.get_view(cmap="RdYlGn")
+        disp_view = cv2.resize(disp_view, (args.viz_hw[1], args.viz_hw[0]))
+        left_image = cv2.resize(left_image, (args.viz_hw[1], args.viz_hw[0]))
 
-        # get frame visualization
-        frame_view = left_frame.get_view()
+        frame_view = np.concatenate([left_image, disp_view], axis=1)
+        frame_view = cv2.cvtColor(frame_view, cv2.COLOR_BGR2RGB)
 
         if args.save_format == "image":
-            frame_view = frame_view.add(disp_view)
-            frame_view.save(os.path.join(args.output, str(idx) + ".png"))
+            cv2.imwrite(os.path.join(args.output, str(idx) + ".png"), frame_view)
 
-        if args.save_format == "video" or args.render:
-            aloscene.render([frame_view, disp_view], record_file=args.output, skip_views=not args.render)
+        if args.save_format == "video":
+            writer.write(frame_view)
 
 
 if __name__ == "__main__":

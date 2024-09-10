@@ -69,15 +69,15 @@ def main(args):
 
     for batch in tqdm(dataloader.val_dataloader, desc="Evaluating"):
         left_frame, right_frame = batch["left"], batch["right"]
-        left_tensor, right_tensor = left_frame.as_tensor().cuda(), right_frame.as_tensor().cuda()
+        left_tensor, right_tensor = left_frame.image.cuda(), right_frame.image.cuda()
         left_tensor, right_tensor = padder.pad(left_tensor, right_tensor)
 
         # Forward
         m_outputs = model(left_tensor, right_tensor)
         disp_pred = m_outputs[-1]["up_disp"]
         disp_pred = padder.unpad(disp_pred)
-        disp_gt = left_frame.disparity.as_tensor().cuda()
-        occ_mask = left_frame.disparity.mask.as_tensor().cuda() > 0
+        disp_gt = left_frame.disparity.data.cuda()
+        occ_mask = left_frame.disparity.occlusion.cuda() > 0
 
         metrics = criterion(disp_gt, disp_pred, ~occ_mask)
         for k, v in metrics.items():

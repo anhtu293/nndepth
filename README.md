@@ -19,11 +19,9 @@ Depth estimation using neural networks is a rapidly evolving field with applicat
 
 ## 2. Dependencies and Setup
 
-This project is built upon [`aloception-oss`](https://github.com/Visual-Behavior/aloception-oss), an open-source package by VisualBehavior. Familiarity with `aloception-oss`, especially `aloscene`, is recommended.
-
 ### Clone
 ```bash
-git clone --recurse-submodules git@github.com:anhtu293/nndepth.git
+git clone git@github.com:anhtu293/nndepth.git
 ```
 
 ### Docker Installation (Recommended)
@@ -32,51 +30,52 @@ The easiest way to set up the working environment is by using Docker. Follow the
 
 1. Build the Docker image:
    ```bash
-   docker build -t nndepth .
+   cd docker && docker build -t nndepth .
    ```
 
 2. Launch the Docker container:
    ```bash
    docker run --gpus all --ipc host -e LOCAL_USER_ID=$(id -u) -it --rm \
      -v /PATH/TO/YOUR/DATASET:/data \
-     -v /PATH/TO/NNDEPTH:/home/aloception/nndepth \
-     -v /home/YOUR_HOME/.config/:/home/aloception/.config \
-     -v /home/YOUR_HOME/.netrc:/home/aloception/.netrc \
+     -v /PATH/TO/NNDEPTH:/home/cv/nndepth \
+     -v /home/YOUR_HOME/.config/:/home/cv/.config \
+     -v /home/YOUR_HOME/.netrc:/home/cv/.netrc \
      --privileged -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix nndepth
    ```
 
    Replace `/PATH/TO/NNDEPTH` with the actual path to your nndepth directory.
    Replace `/PATH/TO/YOUR/DATASET` with the path to your dataset directory.
-   `-v /home/YOUR_HOME/.config/:/home/aloception/.config -v /home/YOUR_HOME/.netrc:/home/aloception/.
+   `-v /home/YOUR_HOME/.config/:/home/cv/.config -v /home/YOUR_HOME/.netrc:/home/cv/.
    netrc` is useful if you want to track your training with **wandb**: these are necessary files which
    store the API key for **wandb**.
 
-3. For the 1st time you launch this container, you need to do this additional step
-   ```bash
-   cd /home/aloception/nndepth && pip install -e aloception-oss
-   ```
 
 ## 3. Project Structure
 The project is organized into several key modules, each serving a specific purpose in the depth estimation pipeline:
 
-1. **blocks**: Contains fundamental neural network building blocks, including:
+1. **scene**: Contains core data structures and utility functions for representing and manipulating scene-related information:
+   - Frame: Represents a single image frame with associated metadata (e.g., camera parameters, depth, disparity, poses)
+   - Depth: Encapsulates depth map data with methods for resizing, visualization, and conversion
+   - Disparity: Similar to Depth, but specifically for disparity maps in stereo vision
+
+2. **blocks**: Contains fundamental neural network building blocks, including:
    - Attention mechanisms
    - Positional encoding
    - Residual blocks
    - Transformer architectures
    - Update blocks for RAFT-based models
 
-2. **datasets**: Houses data loader classes for various depth estimation datasets, ensuring efficient and standardized data handling across different algorithms.
+3. **datasets**: Houses data loader classes for various depth estimation datasets, ensuring efficient and standardized data handling across different algorithms.
 
-3. **disparity**: Encompasses modules for training and inferencing various neural networks specifically designed for stereo depth estimation. Read this [documentation](nndepth/disparity/README.md) for details.
+4. **disparity**: Encompasses modules for training and inferencing various neural networks specifically designed for stereo depth estimation. Read this [documentation](nndepth/disparity/README.md) for details.
 
-4. **extractors**: Contains backbone architectures used as feature extractors in depth estimation models.
+5. **extractors**: Contains backbone architectures used as feature extractors in depth estimation models.
 
-5. **models**: Implements complete depth estimation models, integrating components from other modules.
+6. **models**: Implements complete depth estimation models, integrating components from other modules.
 
-6. **utils**: Provides utility functions and helper classes used throughout the project.
+7. **utils**: Provides utility functions and helper classes used throughout the project.
 
-7. **scripts**: Contains various scripts for data preprocessing, model evaluation, and other auxiliary tasks.
+8. **scripts**: Contains various scripts for data preprocessing, model evaluation, and other auxiliary tasks.
 
 This modular structure allows for easy maintenance, extensibility, and reusability of components across different depth estimation algorithms.
 

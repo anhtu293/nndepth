@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import aloscene
-
 from nndepth.blocks.update_block import BasicUpdateBlock
 from nndepth.extractors.basic_encoder import BasicEncoder
 from nndepth.disparity.models.cost_volume.crestereo import AGCL
@@ -129,21 +127,6 @@ class CREStereoBase(nn.Module):
         _y = torch.zeros([N, 1, H, W], dtype=torch.float32)
         zero_flow = torch.cat((_x, _y), dim=1).to(fmap.device)
         return zero_flow
-
-    @torch.no_grad()
-    def inference(self, m_outputs, only_last=False):
-        def generate_frame(out_dict):
-            return aloscene.Disparity(
-                out_dict["up_disp"],
-                names=("B", "C", "H", "W"),
-                camera_side="left",
-                disp_format="signed",
-            )
-
-        if only_last:
-            return generate_frame(m_outputs[-1])
-        else:
-            return [generate_frame(out_dict) for out_dict in m_outputs]
 
     def forward(
         self,
