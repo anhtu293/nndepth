@@ -3,7 +3,6 @@ import torch.nn as nn
 from typing import Dict
 
 
-
 class PydNet(nn.Module):
     """Pydnet from https://arxiv.org/pdf/1806.11430.pdf"""
 
