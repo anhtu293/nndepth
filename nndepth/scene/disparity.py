@@ -81,7 +81,8 @@ def minpool_disp(disp: torch.Tensor, size: Tuple[int, int], disp_sign: str, **kw
     """
     current_HW = disp.shape[-2:]
     kernel = (current_HW[0] // size[0], current_HW[1] // size[1])
-    new_disp, indices = -max_pool2d(-disp.abs(), kernel_size=kernel, return_indices=True)
+    new_disp, indices = max_pool2d(-disp.abs(), kernel_size=kernel, return_indices=True)
+    new_disp = -new_disp
     if disp_sign == "negative":
         new_disp *= -1
     if new_disp.shape[-2] != size[0] or new_disp.shape[-1] != size[1]:
@@ -157,7 +158,7 @@ class Disparity:
                 data = interpolate(self.data, size, mode="bilinear", **resize_kwargs)
                 if self.occlusion is not None:
                     occlusion = interpolate(self.occlusion, size, mode="bilinear", **resize_kwargs)
-        elif method in ["maxpool", "minpool"] :
+        elif method in ["maxpool", "minpool"]:
             if method == "maxpool":
                 data, indices = maxpool_disp(self.data, size, self.disp_sign, **resize_kwargs)
             elif method == "minpool":

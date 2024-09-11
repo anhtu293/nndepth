@@ -67,7 +67,8 @@ def minpool_depth(depth: torch.Tensor, size: Tuple[int, int], **kwargs) -> torch
     """
     current_HW = depth.shape[-2:]
     kernel = (current_HW[0] // size[0], current_HW[1] // size[1])
-    new_depth, indices = -max_pool2d(-depth.abs(), kernel_size=kernel, return_indices=True)
+    new_depth, indices = max_pool2d(-depth.abs(), kernel_size=kernel, return_indices=True)
+    new_depth = -new_depth
     if new_depth.shape[-2] != size[0] or new_depth.shape[-1] != size[1]:
         new_depth = interpolate(new_depth, size=size, mode="bilinear", **kwargs)
     return new_depth, indices
@@ -129,7 +130,7 @@ class Depth:
                 data = interpolate(self.data, size, mode="bilinear", **resize_kwargs)
                 if self.valid_mask is not None:
                     valid_mask = interpolate(self.valid_mask, size, mode="bilinear", **resize_kwargs)
-        elif method in ["maxpool", "minpool"] :
+        elif method in ["maxpool", "minpool"]:
             if method == "maxpool":
                 data, indices = maxpool_depth(self.data, size, **resize_kwargs)
             elif method == "minpool":
