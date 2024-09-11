@@ -85,4 +85,4 @@ jobs:
         -
             name: Run test
             run:
-                pytest
+                pytest --cov. --disable-warnings tests/
