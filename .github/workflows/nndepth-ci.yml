@@ -59,6 +59,7 @@ jobs:
 
     Test:
         runs-on: ubuntu-latest
+        needs: Build
         steps:
         -
             name: Checkout
