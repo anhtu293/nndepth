@@ -5,6 +5,15 @@ This module is used to implement - train - inference different neural networks f
   <img src="../../images/tartanair_disp.png"/>
 </p>
 
+## 0. Model Zoo
+| Model              | Kitti d1 | Kitti EPE | Download |
+| :---------------- | :------: | :----: | :---------:
+| **BaseRaftStereo** | 0.08448 | 1.47151| [Link](https://drive.google.com/drive/folders/1OZIqRjqlF2fD4wwbMsFf5Lxx7ovYdu1D)|
+| **Coarse2FineGroupRepViTRAFTStereo** | WIP | WIP | WIP |
+| **CREStereoBase** | WIP | WIP | WIP |
+| **IGEVStereoBase** | WIP | WIP | WIP |
+| **IGEVStereoMBNet** | WIP | WIP | WIP |
+
 ## 1. Structure
 ```
 .
@@ -21,7 +30,8 @@ This module is used to implement - train - inference different neural networks f
 
 ## 2. How to launch the training
 - There are different script in `scripts` corresponding different training on different datasets.
-- At the moment, only the training on TartanAir dataset is supported.
+- For dataset organization details, please read the [dataset readme](../datasets/README.md).
+- At the moment, only the training on TartanAir dataset is supported. More datasets will be coming soon.
 - Training arguments:
 ```
 usage: train.py [-h] --model_config MODEL_CONFIG --data_config DATA_CONFIG --training_config TRAINING_CONFIG [--resume_from_checkpoint RESUME_FROM_CHECKPOINT]
@@ -81,8 +91,45 @@ options:
 │   ├── 3_right.png
 │   └── 4_right.png
 ```
+### **Example**
+- Download the config and checkpoint from [here](https://drive.google.com/drive/folders/1OZIqRjqlF2fD4wwbMsFf5Lxx7ovYdu1D).
+- Launch the command
+```bash
+python nndepth/disparity/inference.py --model_config BaseRAFTStereo.yaml --weights pytorch_model.bin --left_path samples/stereo/left/ --right_path samples/stereo/right --HW 480 640 --output output_dir --save_format image --viz_hw 480 640
+```
 
-## 4. Commands
+## 4. How to launch the evaluation
+- - Script `nndepth/disparity/evaluate.py`:
+```
+usage: evaluate.py [-h] --model_config MODEL_CONFIG --data_config DATA_CONFIG --weights WEIGHTS [--metric_name METRIC_NAME [METRIC_NAME ...]]
+                   [--metric_threshold METRIC_THRESHOLD [METRIC_THRESHOLD ...]] --output OUTPUT [--divisible_by DIVISIBLE_BY]
+
+options:
+  -h, --help            show this help message and exit
+  --model_config MODEL_CONFIG
+                        Path to model config file
+  --data_config DATA_CONFIG
+                        Path to data config file
+  --weights WEIGHTS     Path to model weight
+  --metric_name METRIC_NAME [METRIC_NAME ...]
+                        Name of metric. Example: kitti-d1
+  --metric_threshold METRIC_THRESHOLD [METRIC_THRESHOLD ...]
+                        Threshold to compute metrics: percentage of points whose error is larger than `metric_threshold`
+  --output OUTPUT       Path to save output. Directory in case of save_format == image, mp4 file in case of video
+  --divisible_by DIVISIBLE_BY
+                        The input resolution of image will be padded so that its height and width are divisible by this number which is highest downsample of backbone.
+                        Default: 32 for RAFTStereo
+```
+### **Example**
+- Download the config and checkpoint from [here](https://drive.google.com/drive/folders/1OZIqRjqlF2fD4wwbMsFf5Lxx7ovYdu1D).
+- Change the path to your kitti [stereo 2015 dataset](https://www.cvlibs.net/datasets/kitti/eval_scene_flow.php?benchmark=stereo) in this [configuration](./configs/data/Kitti2015DisparityDataLoader.yaml) (`dataset_dir`). If you do not have Kitti on your PC, you can use the path to the [kitti-stereo-2015](../../samples/kitti-stereo-2015/) in our samples.
+- Launch the command
+```bash
+python nndepth/disparity/evaluate.py --model_config BaseRAFTStereo.yaml --weights pytorch_model.bin --data_config Kitti2015DisparityDataLoader.yaml --metric_name kitti-d1 --metric_threshold 3 --output results.txt
+```
+
+
+## 5. Commands
 ### Training
 ```bash
 python train.py --model_config PATH --data_config PATH --training_config PATH
@@ -112,7 +159,7 @@ The results will be saved in `--output` file and have following format
 
 - Detail commands & weights for each model are in the next section.
 
-## 5. Supported models
+## 6. Supported models
 - Trained weights and configuration can be found [here](https://drive.google.com/drive/folders/1hoOflbJ_75kmucyyN7eTwFT6le44oDuJ)
 <details>
   <summary><b> RAFT-Stereo</b></summary>
