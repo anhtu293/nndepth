@@ -81,7 +81,7 @@ jobs:
         -
             name: Run docker container
             run: |
-                docker run --rm --name test -v $PWD:/home/cv/nndepth nndepth
+                docker run -i --rm --name test -v $PWD:/home/cv/nndepth nndepth
         -
             name: Run test scene
             run: |
