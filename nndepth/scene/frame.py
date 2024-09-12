@@ -88,6 +88,7 @@ class Frame:
             cam_intrinsic=cam_intrinsic,
             cam_extrinsic=self.cam_extrinsic,
             baseline=self.baseline,
-            camera=self.camera
+            camera=self.camera,
+            batch_size=self.batch_size
         )
         return new_frame
