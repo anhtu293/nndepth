@@ -25,7 +25,7 @@ jobs:
             uses: docker/build-push-action@v6
             with:
                 context: ./docker
-                file: ./Dockerfile.gpu
+                file: ./docker/Dockerfile.gpu
                 tags: nndepth:latest
                 outputs: type=docker,dest=/tmp/nndepth.tar
         -
