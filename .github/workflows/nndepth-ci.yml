@@ -81,11 +81,12 @@ jobs:
         -
             name: Run docker container
             run: |
-                docker run --rm --name test -v $PWD:/home/cv/nndepth nndepth
+                docker run -d --rm --name nndepth -v $PWD:/home/cv/nndepth nndepth
         -
             name: Run test scene
             run: |
-                docker exec test bash -c 'cd /home/cv/nndepth && pytest --cov=nndepth/scene --disable-warnings tests/test_scene.py'
+                docker ps
+                docker exec nndepth bash -c 'cd /home/cv/nndepth && pytest --cov=nndepth/scene --disable-warnings tests/test_scene.py'
 
     Clean-Artifact:
         runs-on: ubuntu-latest
