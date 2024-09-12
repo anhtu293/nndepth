@@ -1,7 +1,7 @@
 FROM pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime
 
-ENV TZ Europe/Paris
-ENV DEBIAN_FRONTEND noninteractive
+ENV TZ=Europe/Paris
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
     apt-get install -y build-essential sudo nano git zip unzip wget curl python3-tk libqt5gui5 libgl1 libglib2.0-0 libpython3-dev libusb-1.0-0 libsm6 gfortran
@@ -13,11 +13,11 @@ RUN python3 -m pip install --upgrade pip wheel
 RUN useradd --create-home --uid 1000 --shell /bin/bash cv && usermod -aG sudo cv && echo "cv ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 RUN chmod -R o+w /home/cv
 
-ENV HOME /home/cv
+ENV HOME=/home/cv
 WORKDIR /home/cv
 
 COPY requirements.txt /install/requirements.txt
 RUN pip install -r /install/requirements.txt
 RUN rm -r /install
 
-ENV PYTHONPATH /home/cv/nndepth
+ENV PYTHONPATH=/home/cv/nndepth
