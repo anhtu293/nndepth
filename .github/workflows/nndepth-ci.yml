@@ -76,7 +76,7 @@ jobs:
         -
             name: Load Docker image
             run: |
-                docker load --input /tmp/myimage.tar
+                docker load --input /tmp/nndepth.tar
                 docker image ls -a
         -
             name: Run docker container
@@ -85,4 +85,14 @@ jobs:
         -
             name: Run test
             run:
-                pytest --cov. --disable-warnings tests/
+                cd /home/cv/nndepth && pytest --cov. --disable-warnings tests/
+
+    Clean-Artifact:
+        runs-on: ubuntu-latest
+        needs: [Test]
+        steps:
+            -
+                name: Remove Artifact
+                uses: geekyeggo/delete-artifact@v5
+                with:
+                    name: my-artifact
