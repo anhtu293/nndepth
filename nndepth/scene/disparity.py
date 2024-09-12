@@ -153,19 +153,21 @@ class Disparity:
             if (len(self.batch_size) == 0):
                 data = interpolate(self.data[None], size, mode="bilinear", **resize_kwargs)[0]
                 if self.occlusion is not None:
-                    occlusion = interpolate(self.occlusion[None], size, mode="bilinear", **resize_kwargs)[0]
+                    occlusion = interpolate(self.occlusion[None].float(), size, mode="bilinear", **resize_kwargs)[0]
             else:
                 data = interpolate(self.data, size, mode="bilinear", **resize_kwargs)
                 if self.occlusion is not None:
-                    occlusion = interpolate(self.occlusion, size, mode="bilinear", **resize_kwargs)
+                    occlusion = interpolate(self.occlusion.float(), size, mode="bilinear", **resize_kwargs)
+                if occlusion is not None:
+                    occlusion = occlusion.type(self.occlusion.dtype)
         elif method in ["maxpool", "minpool"]:
             if method == "maxpool":
                 data, indices = maxpool_disp(self.data, size, self.disp_sign, **resize_kwargs)
             elif method == "minpool":
                 data, indices = minpool_disp(self.data, size, self.disp_sign, **resize_kwargs)
             if self.occlusion is not None:
-                occlusion = self.occlusion.flatten(-2)
-                occlusion = occlusion[indices.flatten(-2)]
+                occlusion = self.occlusion.flatten()
+                occlusion = occlusion[indices.flatten()]
                 occlusion = occlusion.reshape(data.shape)
 
         # rescale disparity
@@ -175,6 +177,8 @@ class Disparity:
             data=data,
             disp_sign=self.disp_sign,
             occlusion=occlusion,
+            batch_size=self.batch_size,
+            device=self.device,
         )
         return new_disp
 
@@ -207,7 +211,8 @@ class Disparity:
             cmap = matplotlib.cm.get_cmap(cmap)
         if len(self.batch_size) == 0:
             disp = self.data.abs()
-            disp[self.occlusion == 1] = 0
+            if self.occlusion is not None:
+                disp[self.occlusion.float() == 1] = 0
             disp = disp.permute([1, 2, 0]).cpu().numpy()
             disp = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(disp)
             if reverse:
@@ -218,7 +223,8 @@ class Disparity:
             disp_color = []
             for i in range(self.batch_size[0]):
                 disp = self.data[i].abs()
-                disp[self.occlusion[i] == 1] = 0
+                if self.occlusion is not None:
+                    disp[self.occlusion[i].float() == 1] = 0
                 disp = disp.permute([1, 2, 0]).cpu().numpy()
                 disp = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(disp)
                 if reverse:

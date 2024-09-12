@@ -13,7 +13,7 @@ RUN python3 -m pip install --upgrade pip wheel
 RUN useradd --create-home --uid 1000 --shell /bin/bash cv && usermod -aG sudo cv && echo "cv ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 RUN chmod -R o+w /home/cv
 
-ENV HOME /home/cv
+ENV HOME=/home/cv
 WORKDIR /home/cv
 
 COPY requirements.txt /install/requirements.txt

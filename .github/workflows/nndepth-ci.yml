@@ -1,0 +1,101 @@
+name: nndepth CI
+on:
+    push:
+        branches:
+            - master
+        paths-ignore:
+            - "*.md"
+    pull_request:
+        branches:
+            - master
+        paths-ignore:
+            - "*.md"
+jobs:
+    Build:
+        runs-on: ubuntu-latest
+        steps:
+        -
+            name: Checkout
+            uses: actions/checkout@v4
+        -
+            name: Set up Docker Buildx
+            uses: docker/setup-buildx-action@v3
+        -
+            name: Build and Push
+            uses: docker/build-push-action@v6
+            with:
+                context: ./docker
+                file: ./docker/Dockerfile.gpu
+                tags: nndepth:latest
+                outputs: type=docker,dest=/tmp/nndepth.tar
+        -
+            name: Upload docker image as artifact
+            uses: actions/upload-artifact@v4
+            with:
+                name: nndepth-image
+                path: /tmp/nndepth.tar
+
+    Lint:
+        runs-on: ubuntu-latest
+        steps:
+        -
+            name: Checkout
+            uses: actions/checkout@v4
+        -
+            name: Set up Python 3.11.9
+            uses: actions/setup-python@v5
+            with:
+                python-version: '3.11.9'
+        -
+            name: Install flake8
+            run: |
+                python -m pip install --upgrade pip
+                pip install flake8==7.1.1
+                pip install flake8_black==0.3.6
+        -
+            name: Lint with flake8
+            run: |
+                flake8 --max-line-length=119 --ignore=E722,I201,I100,BLK100,W503 --per-file-ignores=__init__.py:F401
+
+    Test:
+        runs-on: ubuntu-latest
+        needs: Build
+        steps:
+        -
+            name: Checkout
+            uses: actions/checkout@v4
+        -
+            name: Set up Docker Buildx
+            uses: docker/setup-buildx-action@v3
+        -
+            name: Download artifact
+            uses: actions/download-artifact@v4
+            with:
+                name: nndepth-image
+                path: /tmp
+        -
+            name: Load Docker image
+            run: |
+                docker load --input /tmp/nndepth.tar
+                docker image ls -a
+        -
+            name: Remove Artifact
+            uses: geekyeggo/delete-artifact@v5
+            with:
+                name: nndepth-image
+        -
+            name: Run docker container
+            run: |
+                docker run -id --rm --name nndepth -v $PWD:/home/cv/nndepth nndepth
+        -
+            name: Run test on Scene
+            run: |
+                docker exec nndepth bash -c 'cd /home/cv/nndepth && pytest --cov=nndepth/scene --disable-warnings tests/scene/'
+        -
+            name: Run test on datasets
+            run: |
+                docker exec nndepth bash -c 'cd /home/cv/nndepth && pytest --cov=nndepth/datasets --disable-warnings tests/datasets/'
+        -
+            name: Run test on disparity models
+            run: |
+                docker exec nndepth bash -c 'cd /home/cv/nndepth && pytest --cov=nndepth/disparity --disable-warnings tests/disparity/'

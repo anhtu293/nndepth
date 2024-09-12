@@ -53,10 +53,20 @@ The easiest way to set up the working environment is by using Docker. Follow the
 ## 3. Project Structure
 The project is organized into several key modules, each serving a specific purpose in the depth estimation pipeline:
 
-1. **scene**: Contains core data structures and utility functions for representing and manipulating scene-related information:
-   - Frame: Represents a single image frame with associated metadata (e.g., camera parameters, depth, disparity, poses)
-   - Depth: Encapsulates depth map data with methods for resizing, visualization, and conversion
-   - Disparity: Similar to Depth, but specifically for disparity maps in stereo vision
+1. **scene**: Core module for scene representation and manipulation:
+   - Frame: Comprehensive representation of an image frame, including:
+     - Raw image data
+     - Camera intrinsics and extrinsics
+     - Associated depth and disparity maps
+     - Pose information
+   - Depth: Robust depth map handling with features for:
+     - Efficient resizing and interpolation
+     - Customizable visualization options
+     - Conversion to other formats (e.g., point clouds)
+   - Disparity: Specialized class for stereo vision, offering:
+     - Conversion between disparity and depth
+     - Stereo-specific visualization tools
+     - Compatibility with various stereo algorithms
 
 2. **blocks**: Contains fundamental neural network building blocks, including:
    - Attention mechanisms
@@ -78,6 +88,7 @@ The project is organized into several key modules, each serving a specific purpo
 8. **scripts**: Contains various scripts for data preprocessing, model evaluation, and other auxiliary tasks.
 
 This modular structure allows for easy maintenance, extensibility, and reusability of components across different depth estimation algorithms.
+
 
 
 ## 4. Training Pipeline
@@ -157,7 +168,6 @@ if __name__ == "__main__":
 
 ```
 
-### 4.3 How to create a correct yaml configuration
 ### 4.3 Creating YAML Configuration Files
 
 - Each YAML file defines a single specific object (e.g., model, data loader, trainer).

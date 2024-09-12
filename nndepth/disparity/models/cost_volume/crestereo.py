@@ -1,5 +1,5 @@
 import torch
-from typing import List, Tuple
+from typing import Tuple
 from nndepth.disparity.models.utils import bilinear_sampler, coords_grid, manual_pad
 
 
@@ -42,7 +42,7 @@ class AGCL:
         corr_list = []
         for h in range(0, pady * 2 + 1, di_y):
             for w in range(0, padx * 2 + 1, di_x):
-                right_crop = right_pad[:, :, h : h + H, w : w + W]
+                right_crop = right_pad[:, :, h:h + H, w:w + W]
                 assert right_crop.shape == left_feature.shape
                 corr = torch.mean(left_feature * right_crop, dim=1, keepdims=True)
                 corr_list.append(corr)

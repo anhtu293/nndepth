@@ -144,12 +144,6 @@ class KittiStereo2015:
 
         Examples
         --------
-        >>> # Load dataset with only the 2 annotated images
-        >>> dataset = KittiStereoFlowSFlow2015(sequence_start=10, sequence_end=11)
-        >>> # Load dataset with 3 context images before the 2 annotated images
-        >>> dataset = KittiStereoFlowSFlow2015(sequence_start=7, sequence_end=11)
-        >>> # Load dataset with all the context images
-        >>> dataset = KittiStereoFlowSFlow2015(sequence_start=0, sequence_end=20)
         >>> # Visualize a sample
         >>> from random import randint
         >>> import cv2

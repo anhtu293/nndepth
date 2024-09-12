@@ -36,7 +36,10 @@ def maxpool_depth(depth: torch.Tensor, size: Tuple[int, int], **kwargs) -> Tuple
     kernel = (current_HW[0] // size[0], current_HW[1] // size[1])
     new_depth, indices = max_pool2d(depth.abs(), kernel_size=kernel, return_indices=True)
     if new_depth.shape[-2] != size[0] or new_depth.shape[-1] != size[1]:
-        new_depth = interpolate(new_depth, size=size, mode="bilinear", **kwargs)
+        if len(new_depth.shape) == 3:
+            new_depth = interpolate(new_depth[None], size=size, mode="bilinear", **kwargs)[0]
+        elif len(new_depth.shape) == 4:
+            new_depth = interpolate(new_depth, size=size, mode="bilinear", **kwargs)
     return new_depth, indices
 
 
@@ -70,7 +73,10 @@ def minpool_depth(depth: torch.Tensor, size: Tuple[int, int], **kwargs) -> torch
     new_depth, indices = max_pool2d(-depth.abs(), kernel_size=kernel, return_indices=True)
     new_depth = -new_depth
     if new_depth.shape[-2] != size[0] or new_depth.shape[-1] != size[1]:
-        new_depth = interpolate(new_depth, size=size, mode="bilinear", **kwargs)
+        if len(new_depth.shape) == 3:
+            new_depth = interpolate(new_depth[None], size=size, mode="bilinear", **kwargs)[0]
+        elif len(new_depth.shape) == 4:
+            new_depth = interpolate(new_depth, size=size, mode="bilinear", **kwargs)
     return new_depth, indices
 
 
@@ -125,24 +131,28 @@ class Depth:
             if (len(self.batch_size) == 0):
                 data = interpolate(self.data[None], size, mode="bilinear", **resize_kwargs)[0]
                 if self.valid_mask is not None:
-                    valid_mask = interpolate(self.valid_mask[None], size, mode="bilinear", **resize_kwargs)[0]
+                    valid_mask = interpolate(self.valid_mask[None].float(), size, mode="bilinear", **resize_kwargs)[0]
             else:
                 data = interpolate(self.data, size, mode="bilinear", **resize_kwargs)
                 if self.valid_mask is not None:
-                    valid_mask = interpolate(self.valid_mask, size, mode="bilinear", **resize_kwargs)
+                    valid_mask = interpolate(self.valid_mask.float(), size, mode="bilinear", **resize_kwargs)
+                if valid_mask is not None:
+                    valid_mask = valid_mask.type(self.valid_mask.dtype)
         elif method in ["maxpool", "minpool"]:
             if method == "maxpool":
                 data, indices = maxpool_depth(self.data, size, **resize_kwargs)
             elif method == "minpool":
                 data, indices = minpool_depth(self.data, size, **resize_kwargs)
             if self.valid_mask is not None:
-                valid_mask = self.valid_mask.flatten(-2)
-                valid_mask = valid_mask[indices.flatten(-2)]
+                valid_mask = self.valid_mask.flatten()
+                valid_mask = valid_mask[indices.flatten()]
                 valid_mask = valid_mask.reshape(data.shape)
 
         new_disp = Depth(
             data=data,
             valid_mask=valid_mask,
+            batch_size=self.batch_size,
+            device=self.device,
         )
         return new_disp
 
@@ -176,7 +186,7 @@ class Depth:
         if len(self.batch_size) == 0:
             depth = self.data.clone()
             if self.valid_mask is not None:
-                depth[self.valid_mask != 1] = 0
+                depth[self.valid_mask.float() != 1] = 0
             depth = depth.permute([1, 2, 0]).cpu().numpy()
             depth = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(depth)
             if reverse:
@@ -188,7 +198,7 @@ class Depth:
             for i in range(self.batch_size[0]):
                 depth = self.data[i].clone()
                 if self.valid_mask is not None:
-                    depth[self.valid_mask[i] != 1] = 0
+                    depth[self.valid_mask[i].float() != 1] = 0
                 depth = depth.permute([1, 2, 0]).cpu().numpy()
                 depth = matplotlib.colors.Normalize(vmin=min, vmax=max, clip=True)(depth)
                 if reverse:
