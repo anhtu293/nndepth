@@ -20,7 +20,7 @@ num_epochs: 100
 max_steps: 100000
 weight_decay: 0.0001
 epsilon: 1.0e-08
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 4
 
 # BaseTrainer
 #
@@ -39,7 +39,7 @@ gradient_accumulation_steps: 2
 workdir: /weights
 project_name: raft_stereo
 experiment_name: BaseRaftStereo
-val_interval: 10
+val_interval: 1.0
 log_interval: 50
 num_val_samples: 10
 save_best_k_cp: 3

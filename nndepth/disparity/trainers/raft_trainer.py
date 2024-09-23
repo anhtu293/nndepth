@@ -168,7 +168,7 @@ class RAFTTrainer(BaseTrainer):
         logger.info("Start training")
 
         if self.max_steps is not None:
-            self.num_epochs = self.max_steps // len(train_dataloader) + 1
+            self.num_epochs = self.max_steps // (len(train_dataloader) // self.gradient_accumulation_steps) + 1
         elif self.num_epochs is not None:
             self.max_steps = len(train_dataloader) * self.num_epochs
 
