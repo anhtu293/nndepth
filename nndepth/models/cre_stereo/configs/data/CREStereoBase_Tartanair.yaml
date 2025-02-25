@@ -1,0 +1,43 @@
+# TartanairDisparityDataLoader configuration file
+
+# TartanairDisparityDataLoader
+#
+#         DataLoader for training disparity on Tartanair dataset
+#
+#         Args:
+#             dataset_dir (str): path to Tartanair dataset
+#             batch_size (int): batch size
+#             num_workers (int): number of workers
+#             HW (Tuple[int, int]): image size
+#             train_envs (List[str]): list of training environments
+#             val_envs (List[str]): list of validation environments
+#
+dataset_dir: /data/tartanair
+HW: [480, 640]
+train_envs:
+- abandonedfactory
+- amusement
+- carwelding
+- endofworld
+- gascola
+- hospital
+- japanesealley
+- neighborhood
+- ocean
+- office
+- office2
+- oldtown
+- seasidetown
+- seasonsforest
+- seasonsforest_winter
+- soulcity
+- westerndesert
+val_envs:
+- abandonedfactory_night
+
+# BaseDataLoader
+#
+#         Base class for all data loaders
+#
+batch_size: 4
+num_workers: 8

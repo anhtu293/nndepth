@@ -1,0 +1,93 @@
+# Coarse2FineGroupRepViTRAFTStereo configuration file
+
+# Coarse2FineGroupRepViTRAFTStereo
+#
+#         Coarse2FineGroupRepViTRAFTStereo
+#
+#         Args:
+#             num_groups (int): Number of groups. Default is 4.
+#             downsample_ratios (List[Tuple[int, int]]): Downsample ratios. Default is [[2, 2], [2, 2], [2, 2], [2, 2]].
+#             ffn_exp_ratios (List[float]): Feed-forward expansion ratios. Default is [1.0, 3.0, 3.0, 4.0].
+#             num_blocks_per_stage (List[int]): Number of blocks per stage. Default is [4, 4, 6, 2].
+#             patch_size (int): Patch size. Default is 7.
+#             stem_strides (List[int]): Stem strides. Default is [[2, 2], [2, 2], [1, 1]].
+#             token_mixer_types (List[str]): Token mixer types.
+#                 Default is ["repmixer", "repmixer", "repmixer", "attention"].
+#             use_ffn_per_stage (List[bool]): Use feed-forward network per stage. Default is [False, True, True, True].
+#             width_multipliers (List[float]): Width multipliers. Default is [1.0, 1.0, 1.0, 1.0].
+#             weights (str): Weights. Default is None.
+#             strict_load (bool): Strict load. Default is True.
+#             **kwargs: Additional keyword arguments.
+#
+#             For `num_groups`, `downsample_ratios`, `ffn_exp_ratios`, `num_blocks_per_stage`, `stem_strides`,
+#                 `token_mixer_types`, `use_ffn_per_stage`, `width_multipliers`,
+#                 Please refer to `nndepth.extractors.rep_vit.RepViT` for detail implementation.
+#
+num_groups: 4
+downsample_ratios:
+- - 2
+  - 2
+- - 2
+  - 2
+- - 2
+  - 2
+- - 2
+  - 2
+ffn_exp_ratios:
+- 1.0
+- 3.0
+- 3.0
+- 4.0
+num_blocks_per_stage:
+- 4
+- 4
+- 6
+- 2
+patch_size: 7
+stem_strides:
+- - 2
+  - 2
+- - 2
+  - 2
+- - 1
+  - 1
+token_mixer_types:
+- repmixer
+- repmixer
+- repmixer
+- attention
+use_ffn_per_stage:
+- false
+- true
+- true
+- true
+width_multipliers:
+- 1.0
+- 1.0
+- 1.0
+- 1.0
+weights: null
+strict_load: true
+
+# RAFTStereo
+# Initialize the RAFTStereo model.
+#
+#         Args:
+#             hidden_dim (int): The hidden dimension. Default is 128.
+#             context_dim (int): The context dimension. Default is 128.
+#             corr_levels (int): The number of correlation levels. Default is 4.
+#             corr_radius (int): The correlation radius. Default is 4.
+#             tracing (bool): Whether to enable tracing for ONNX exportation. Default is False.
+#             include_preprocessing (bool): Whether to include preprocessing steps. Default is False.
+#             **kwargs: Additional keyword arguments.
+#
+iters: 12
+fnet_dim: 256
+hidden_dim: 128
+context_dim: 128
+corr_levels: 4
+corr_radius: 4
+tracing: false
+include_preprocessing: false
+weights: null
+strict_load: true
