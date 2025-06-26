@@ -238,7 +238,6 @@ class KittiStereo2015:
             sequence[index] = {}
             if "left" in self.cameras:
                 img = self.load_image(os.path.join(self.split_folder, f"image_2/{idx:06d}_{index:02d}.png"))
-                baseline = calib["baseline"]
                 cam_intrinsic = calib["left_intrinsic"]
                 cam_extrinsic = calib["left_extrinsic"]
                 camera = Camera(
@@ -251,7 +250,6 @@ class KittiStereo2015:
                 )
             if "right" in self.cameras:
                 img = self.load_image(os.path.join(self.split_folder, f"image_3/{idx:06d}_{index:02d}.png"))
-                baseline = calib["baseline"]
                 cam_intrinsic = calib["left_intrinsic"]
                 cam_extrinsic = calib["left_extrinsic"]
                 camera = Camera(

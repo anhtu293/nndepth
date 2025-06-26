@@ -215,7 +215,11 @@ class IGEVStereoTrainer(BaseTrainer):
                     results = self.evaluate(model, criterion, val_dataloader, device)
 
                     # Infer on 1 example to log for debugging purposes
-                    image, disp_gt, disp_pred = self.predict_and_get_visualization(model, next(iter(val_dataloader)), device)
+                    image, disp_gt, disp_pred = self.predict_and_get_visualization(
+                        model,
+                        next(iter(val_dataloader)),
+                        device,
+                    )
 
                     tracker.log(
                         {
