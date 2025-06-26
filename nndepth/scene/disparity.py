@@ -1,6 +1,5 @@
 import torch
 from torch.nn.functional import interpolate, max_pool2d
-from tensordict import tensorclass
 import numpy as np
 import matplotlib
 import matplotlib.cm
@@ -39,16 +38,15 @@ def maxpool_disp(
     then adjusts the disp_sign if necessary, and finally interpolates if the resulting
     size doesn't match the target size.
     """
+    assert disp.ndim == 4, "Only support resize disparity with maxpool with 4 dimensions"
+
     current_HW = disp.shape[-2:]
     kernel = (current_HW[0] // size[0], current_HW[1] // size[1])
     new_disp, indices = max_pool2d(disp.abs(), kernel_size=kernel, return_indices=True)
     if disp_sign == "negative":
         new_disp *= -1
     if new_disp.shape[-2] != size[0] or new_disp.shape[-1] != size[1]:
-        if len(new_disp.shape) == 3:
-            new_disp = interpolate(new_disp[None], size=size, mode="bilinear", **kwargs)[0]
-        elif len(new_disp.shape) == 4:
-            new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
+        new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
     return new_disp, indices
 
 
@@ -79,6 +77,8 @@ def minpool_disp(disp: torch.Tensor, size: Tuple[int, int], disp_sign: str, **kw
     then adjusts the sign if necessary, and finally interpolates if the resulting
     size doesn't match the target size.
     """
+    assert disp.ndim == 4, "Only support resize disparity with minpool with 4 dimensions"
+
     current_HW = disp.shape[-2:]
     kernel = (current_HW[0] // size[0], current_HW[1] // size[1])
     new_disp, indices = max_pool2d(-disp.abs(), kernel_size=kernel, return_indices=True)
@@ -86,37 +86,41 @@ def minpool_disp(disp: torch.Tensor, size: Tuple[int, int], disp_sign: str, **kw
     if disp_sign == "negative":
         new_disp *= -1
     if new_disp.shape[-2] != size[0] or new_disp.shape[-1] != size[1]:
-        if len(new_disp.shape) == 3:
-            new_disp = interpolate(new_disp[None], size=size, mode="bilinear", **kwargs)[0]
-        elif len(new_disp.shape) == 4:
-            new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
+        new_disp = interpolate(new_disp, size=size, mode="bilinear", **kwargs)
     return new_disp, indices
 
 
-@tensorclass
 class Disparity:
-    """
-    A class representing disparity information for a frame in a scene.
+    def __init__(
+            self,
+            data: torch.Tensor,
+            disp_sign: Literal["negative", "positive"] = "negative",
+            occlusion: Optional[torch.Tensor] = None,
+            baseline: Optional[float] = None,
+    ):
+        """
+        A class representing disparity information for a frame in a scene.
 
-    Attributes:
-        data (torch.Tensor): The disparity data as a tensor.
-        disp_sign (Literal["negative", "positive"]): The sign convention for the disparity values.
-            "negative" means disparity increases as depth decreases (typical for left-to-right stereo).
-            "positive" means disparity increases as depth increases (typical for right-to-left stereo).
-        occlusion (Optional[torch.Tensor]): A mask indicating occluded areas in the disparity map.
+        Attributes:
+            data (torch.Tensor): The disparity data as a tensor.
+            disp_sign (Literal["negative", "positive"]): The sign convention for the disparity values.
+                "negative" means disparity increases as depth decreases (typical for left-to-right stereo).
+                "positive" means disparity increases as depth increases (typical for right-to-left stereo).
+            occlusion (Optional[torch.Tensor]): A mask indicating occluded areas in the disparity map.
+            baseline (Optional[float]): The baseline distance between the two cameras.
+        Methods:
+            resize(size: Tuple[int, int], method: str = "interpolate", **resize_kwargs) -> Disparity:
+                Resizes the disparity data and occlusion mask (if present).
 
-    Methods:
-        resize(size: Tuple[int, int], method: str = "interpolate", **resize_kwargs) -> Disparity:
-            Resizes the disparity data and occlusion mask (if present).
-
-    Notes:
-        Disparity is inversely proportional to depth. It represents the pixel offset between
-        corresponding points in a stereo image pair. The disparity sign convention is important
-        for correct interpretation and processing of the disparity data.
-    """
-    data: torch.Tensor
-    disp_sign: Literal["negative", "positive"] = "negative"
-    occlusion: Optional[torch.Tensor] = None
+        Notes:
+            Disparity is inversely proportional to depth. It represents the pixel offset between
+            corresponding points in a stereo image pair. The disparity sign convention is important
+            for correct interpretation and processing of the disparity data.
+        """
+        self.data = data
+        self.disp_sign = disp_sign
+        self.occlusion = occlusion
+        self.baseline = baseline
 
     def resize(self, size: Tuple[int, int], method: str = "interpolate", **resize_kwargs):
         """Resize disparity
@@ -145,21 +149,32 @@ class Disparity:
         assert method in ["interpolate", "maxpool", "minpool"], (
             "method must be in [`interpolate`, `maxpool`, `minpool`]"
         )
+        assert self.data.ndim <= 4, "Only support resize disparity with 3 or 4 dimensions"
+        if self.occlusion is not None:
+            assert self.occlusion.ndim <= 4, "Only support resize occlusion with 3 or 4 dimensions"
+
+        missing_dim = 4 - self.data.ndim
+        for _ in range(missing_dim):
+            self.data = self.data[None]
+
+        if self.occlusion is not None:
+            missing_dim = 4 - self.occlusion.ndim
+            for _ in range(missing_dim):
+                self.occlusion = self.occlusion[None]
+
         # resize disparity
         W_old = self.data.shape[-1]
 
         occlusion = None
         if method == "interpolate":
-            if (len(self.batch_size) == 0):
-                data = interpolate(self.data[None], size, mode="bilinear", **resize_kwargs)[0]
-                if self.occlusion is not None:
-                    occlusion = interpolate(self.occlusion[None].float(), size, mode="bilinear", **resize_kwargs)[0]
-            else:
-                data = interpolate(self.data, size, mode="bilinear", **resize_kwargs)
-                if self.occlusion is not None:
-                    occlusion = interpolate(self.occlusion.float(), size, mode="bilinear", **resize_kwargs)
-                if occlusion is not None:
-                    occlusion = occlusion.type(self.occlusion.dtype)
+            data = interpolate(self.data, size, mode="bilinear", **resize_kwargs)
+            if self.occlusion is not None:
+                occlusion = interpolate(
+                    self.occlusion.float(),
+                    size,
+                    mode="bilinear",
+                    **resize_kwargs).type(self.occlusion.dtype)
+
         elif method in ["maxpool", "minpool"]:
             if method == "maxpool":
                 data, indices = maxpool_disp(self.data, size, self.disp_sign, **resize_kwargs)
@@ -173,12 +188,18 @@ class Disparity:
         # rescale disparity
         W_new = data.shape[-1]
         data = data * W_new / W_old
+
+        for _ in range(missing_dim):
+            data = data[0]
+
+        if occlusion is not None:
+            for _ in range(missing_dim):
+                occlusion = occlusion[0]
+
         new_disp = Disparity(
             data=data,
             disp_sign=self.disp_sign,
             occlusion=occlusion,
-            batch_size=self.batch_size,
-            device=self.device,
         )
         return new_disp
 
@@ -205,11 +226,13 @@ class Disparity:
         Union[np.ndarray, List[np.ndarray]]
             The colored visualization of the disparity map or a list of visualization in case of batch disparity
         """
+        assert self.data.ndim <= 4, "Only support get_view for disparity with 3 or 4 dimensions"
+
         if cmap == "red2green":
             cmap = matplotlib.colors.LinearSegmentedColormap.from_list("rg", ["r", "w", "g"], N=256)
         elif isinstance(cmap, str):
             cmap = matplotlib.cm.get_cmap(cmap)
-        if len(self.batch_size) == 0:
+        if self.data.ndim == 3:
             disp = self.data.abs()
             if self.occlusion is not None:
                 disp[self.occlusion.float() == 1] = 0
@@ -221,7 +244,7 @@ class Disparity:
             disp_color = (disp_color * 255).astype(np.uint8)
         else:
             disp_color = []
-            for i in range(self.batch_size[0]):
+            for i in range(self.data.shape[0]):
                 disp = self.data[i].abs()
                 if self.occlusion is not None:
                     disp[self.occlusion[i].float() == 1] = 0

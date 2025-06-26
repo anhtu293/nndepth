@@ -100,7 +100,6 @@ if __name__ == "__main__":
 
     with open(args.save_path, "w") as f:
         f.write(f"# {args.cls_name} configuration file \n\n")
-        f.write(f"name: {args.cls_name} \n")
         write_config_file_and_doc(
             file=f,
             module_path=args.module_path,

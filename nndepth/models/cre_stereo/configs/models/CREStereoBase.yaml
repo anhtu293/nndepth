@@ -1,0 +1,34 @@
+# CREStereoBase configuration file
+
+# CREStereoBase
+#
+#         Initialize the CREStereoBase model.
+#
+#         Args:
+#             fnet_cls (str): The class name of the feature extraction network. Default is "basic_encoder".
+#             update_cls (str): The class name of the update block. Default is "basic_update_block".
+#             max_disp (int): The maximum disparity value. Default is 192.
+#             num_fnet_channels (int): The number of channels in the feature extraction network. Default is 256.
+#             hidden_dim (int): The hidden dimension size. Default is 128.
+#             context_dim (int): The context dimension size. Default is 128.
+#             search_num (int): The number of search iterations. Default is 9.
+#             mixed_precision (bool): Whether to use mixed precision training. Default is False.
+#             test_mode (bool): Whether to run the model in test mode. Default is False.
+#             tracing (bool): Whether to enable tracing. Default is False.
+#             include_preprocessing (bool): Whether to include preprocessing steps. Default is False.
+#             **kwargs: Additional keyword arguments.
+#
+fnet_cls: basic_encoder
+update_cls: basic_update_block
+iters: 4
+max_disp: 192
+num_fnet_channels: 256
+hidden_dim: 128
+context_dim: 128
+search_num: 9
+mixed_precision: false
+test_mode: false
+tracing: false
+include_preprocessing: false
+weights: null
+strict_load: true

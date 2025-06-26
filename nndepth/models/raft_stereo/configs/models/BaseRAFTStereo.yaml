@@ -1,0 +1,25 @@
+# BaseRAFTStereo configuration file
+
+# BaseRAFTStereo
+# RAFTStereo
+# Initialize the RAFTStereo model.
+#
+#         Args:
+#             hidden_dim (int): The hidden dimension. Default is 128.
+#             context_dim (int): The context dimension. Default is 128.
+#             corr_levels (int): The number of correlation levels. Default is 4.
+#             corr_radius (int): The correlation radius. Default is 4.
+#             tracing (bool): Whether to enable tracing for ONNX exportation. Default is False.
+#             include_preprocessing (bool): Whether to include preprocessing steps. Default is False.
+#             **kwargs: Additional keyword arguments.
+#
+iters: 12
+fnet_dim: 256
+hidden_dim: 128
+context_dim: 64
+corr_levels: 4
+corr_radius: 4
+tracing: false
+include_preprocessing: false
+weights: null
+strict_load: true

@@ -1,9 +1,14 @@
 import os
+import torch
+from torch import nn
+from torch import optim
+from abc import ABC, abstractmethod
 from typing import Union, Optional, Tuple
 from loguru import logger
+import yaml
 
 
-class BaseTrainer(object):
+class BaseTrainer(ABC):
     def __init__(
         self,
         workdir: str,
@@ -48,6 +53,13 @@ class BaseTrainer(object):
 
         self.setup_workdir()
 
+    @classmethod
+    def init_from_config(cls, config: Union[dict, str]) -> Tuple["BaseTrainer", dict]:
+        if isinstance(config, str):
+            with open(config, "r") as f:
+                config = yaml.load(f, Loader=yaml.FullLoader)
+        return cls(**config), config
+
     def setup_workdir(self):
         """
         Setup directories for the experiment
@@ -75,7 +87,7 @@ class BaseTrainer(object):
         Returns:
             str: checkpoint name
         """
-        return f"epoch={epoch}_steps={steps}_{metric_name}={metric:.4f}.pth"
+        return f"epoch={epoch}_steps={steps}_{metric_name}={metric:.4f}"
 
     def get_latest_checkpoint_name(self, steps: int) -> str:
         """
@@ -87,7 +99,7 @@ class BaseTrainer(object):
         Returns:
             str: checkpoint name
         """
-        return f"latest_steps={steps}.pth"
+        return f"latest_steps={steps}"
 
     @staticmethod
     def get_latest_checkpoint_from_dir(dir_path: str):
@@ -102,11 +114,11 @@ class BaseTrainer(object):
         """
         assert os.path.isdir(dir_path), f"{dir_path} is not a directory"
 
-        checkpoints = [f for f in os.listdir(dir_path) if f.endswith(".pth")]
+        checkpoints = [f for f in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, f))]
         for cp in checkpoints:
             if "latest" in cp:
                 return cp
-        logger.info("No latest checkpoint found. Latest checkpoint must have the format `latest_steps-<steps>.pth`")
+        logger.info("No latest checkpoint found. Latest checkpoint must have the format `latest_steps-<steps>`")
         return None
 
     @staticmethod
@@ -124,7 +136,9 @@ class BaseTrainer(object):
         assert condition in ["max", "min"], "condition must be either `max` or `min`"
         assert os.path.isdir(dir_path), f"{dir_path} is not a directory"
 
-        checkpoints = [f for f in os.listdir(dir_path) if f.endswith(".pth") and "latest" not in f]
+        checkpoints = [
+            f for f in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, f)) and "latest" not in f
+        ]
         if not checkpoints:
             return None
         checkpoints = sorted(checkpoints, key=lambda x: int(x.split("_")[-1]))
@@ -141,19 +155,19 @@ class BaseTrainer(object):
             dir_path (str): path to the directory
         """
         cp_path = cp_path.rstrip("/")
-        assert os.path.exists(cp_path) and cp_path.endswith(".pth"), f"{cp_path} must be a `.pth` file"
+        assert os.path.exists(cp_path), f"{cp_path} does not exist"
 
         checkpoint_infos = []
         file_name = os.path.basename(cp_path)
         dir_path = os.path.dirname(cp_path)
         if "latest" in file_name:
             # Load from latest checkpoint
-            self.current_steps = int(file_name.replace(".pth", "").split("_")[1].split("=")[1])
+            self.current_steps = int(file_name.split("_")[1].split("=")[1])
             for f in os.listdir(dir_path):
-                if f.endswith(".pth") and "latest" not in f:
+                if os.path.isdir(os.path.join(dir_path, f)) and "latest" not in f:
                     epoch = int(f.split("_")[0].split("=")[1])
                     steps = int(f.split("_")[1].split("=")[1])
-                    metric = float(f.replace(".pth", "").split("_")[2].split("=")[1])
+                    metric = float(f.split("_")[2].split("=")[1])
                     metric_name = f.split("_")[2].split("=")[0]
                     checkpoint_infos.append(
                         {"epoch": epoch, "steps": steps, "metric": metric, "metric_name": metric_name}
@@ -163,12 +177,12 @@ class BaseTrainer(object):
             # Load from a specific checkpoint
             self.current_steps = int(file_name.split("_")[1].split("=")[1])
             for f in os.listdir(dir_path):
-                if f.endswith(".pth") and "latest" not in f:
+                if os.path.isdir(os.path.join(dir_path, f)) and "latest" not in f:
                     steps = int(f.split("_")[1].split("=")[1])
                     if steps > self.current_steps:
                         continue
                     epoch = int(f.split("_")[0].split("=")[1])
-                    metric = float(f.replace(".pth", "").split("_")[2].split("=")[1])
+                    metric = float(f.split("_")[2].split("=")[1])
                     metric_name = f.split("_")[2].split("=")[0]
                     checkpoint_infos.append(
                         {"epoch": epoch, "step": steps, "metric": metric, "metric_name": metric_name}
@@ -231,8 +245,61 @@ class BaseTrainer(object):
 
         return new_cp_dir, replaced_cp_dir
 
-    def train(self, *args, **kwargs):
-        raise NotImplementedError("Should be implemented in child class.")
+    def save_checkpoint(
+        self,
+        dir_path: str,
+        model_state_dict: dict,
+        optimizer_state_dict: dict,
+        scheduler_state_dict: dict,
+    ) -> None:
+        """
+        Save checkpoint
 
+        Args:
+            dir_path (str): path to the directory
+            model (nn.Module): model
+            optimizer (optim.Optimizer): optimizer
+            scheduler (optim.lr_scheduler.LRScheduler): scheduler
+        """
+        os.makedirs(dir_path, exist_ok=True)
+        torch.save(model_state_dict, os.path.join(dir_path, "model.pth"))
+
+        # Save optimizer state dict
+        torch.save(optimizer_state_dict, os.path.join(dir_path, "optimizer.pth"))
+
+        # Save scheduler state dict
+        torch.save(scheduler_state_dict, os.path.join(dir_path, "scheduler.pth"))
+
+    def resume_from_checkpoint(
+        self,
+        dir_path: str,
+        model: Optional[nn.Module] = None,
+        optimizer: Optional[optim.Optimizer] = None,
+        scheduler: Optional[optim.lr_scheduler.LRScheduler] = None,
+    ):
+        """
+        Resume training from the checkpoint
+
+        Args:
+            dir_path (str): path to the directory
+        """
+        self.load_state(dir_path)
+
+        if model is not None:
+            model.load_state_dict(torch.load(os.path.join(dir_path, "model.pth")))
+
+        if optimizer is not None:
+            optimizer.load_state_dict(torch.load(os.path.join(dir_path, "optimizer.pth")))
+
+        if scheduler is not None:
+            scheduler.load_state_dict(torch.load(os.path.join(dir_path, "scheduler.pth")))
+
+        logger.info("Training is resumed from checkpoint !")
+
+    @abstractmethod
+    def train(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
     def evaluate(self, *args, **kwargs):
-        raise NotImplementedError("Should be implemented in child class.")
+        pass
