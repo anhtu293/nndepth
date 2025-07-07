@@ -1,33 +1,45 @@
 import os
 import argparse
+import sys
 import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.distributed import init_process_group, destroy_process_group, get_world_size
 from loguru import logger
+from typing import Union
 
 from nndepth.data.dataloaders import TartanairDisparityDataLoader
-from nndepth.utils import add_common_args
 from nndepth.utils.trackers.wandb import WandbTracker
 from nndepth.utils.distributed_training import is_distributed_training
-from nndepth.models.raft_stereo import STEREO_MODELS, RAFTLoss, RAFTTrainer
+from nndepth.models.raft_stereo import RAFTLoss, RAFTTrainer
+from nndepth.models.raft_stereo.configs import BaseRAFTTrainingConfig, RepViTRAFTStereoTrainingConfig
+from nndepth.models.raft_stereo.model import BaseRAFTStereo, Coarse2FineGroupRepViTRAFTStereo
 
 
 def main():
+
+    TRAINING_CONFIGS = {
+        "base_raft_stereo": BaseRAFTTrainingConfig,
+        "coarse2fine_group_repvit_raft_stereo": RepViTRAFTStereoTrainingConfig,
+    }
+    MODEL_CONFIGS = {
+        "base_raft_stereo": BaseRAFTStereo,
+        "coarse2fine_group_repvit_raft_stereo": Coarse2FineGroupRepViTRAFTStereo,
+    }
+    model_name = sys.argv[1]
+    assert model_name in TRAINING_CONFIGS, f"Model {model_name} not found"
+    training_config = TRAINING_CONFIGS[model_name]
+
     parser = argparse.ArgumentParser()
-    parser = add_common_args(parser)
-    parser.add_argument(
-        "--model_name",
-        required=True,
-        type=str,
-        choices=STEREO_MODELS.keys(),
-        help="Name of the model to train",
-    )
+    training_config.add_args(parser)
     args = parser.parse_args()
 
-    model, model_config = STEREO_MODELS[args.model_name].init_from_config(args.model_config)
-    dataloader, data_config = TartanairDisparityDataLoader.init_from_config(args.data_config)
-    trainer, training_config = RAFTTrainer.init_from_config(args.training_config)
+    training_config: Union[BaseRAFTTrainingConfig, RepViTRAFTStereoTrainingConfig] = training_config.from_args(args)
+
+    dataloader = TartanairDisparityDataLoader(**training_config.data.to_dict())
+    trainer = RAFTTrainer(**training_config.trainer.to_dict())
+    model = MODEL_CONFIGS[model_name](**training_config.model.to_dict())
+
 
     # Init data loader
     dataloader.setup()
@@ -45,11 +57,11 @@ def main():
     )
 
     # Init tracker
-    grouped_configs = {"model": model_config, "data": data_config, "training": training_config}
+    grouped_configs = {"model": training_config.model.to_dict(), "data": training_config.data.to_dict(), "training": training_config.trainer.to_dict()}
     wandb_tracker = WandbTracker(
-        project_name=trainer.project_name,
-        run_name=trainer.experiment_name,
-        root_log_dir=trainer.artifact_dir,
+        project_name=training_config.trainer.project_name,
+        run_name=training_config.trainer.experiment_name,
+        root_log_dir=training_config.trainer.workdir,
         config=grouped_configs,
     )
 
@@ -68,14 +80,14 @@ def main():
             model = torch.compile(model)
             logger.info("Model compiled !")
 
-        model = torch.nn.parallel.DistributedDataParallel(model, devices_ids=[ddp_local_rank])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(ddp_local_rank)])
         logger.info(f"Model DDP initialized on device {ddp_local_rank}")
 
-        if training_config["max_steps"] is not None:
+        if training_config.trainer.max_steps is not None:
             assert (
-                training_config["max_steps"] % get_world_size() == 0
+                training_config.trainer.max_steps % get_world_size() == 0
             ), "max_steps must be divisible by the number of GPUs"
-            training_config["max_steps"] = training_config["max_steps"] // get_world_size()
+            training_config.trainer.max_steps = training_config.trainer.max_steps // get_world_size()
     else:
         model = model.to(torch.device("cuda"))
         device = "cuda:0"
@@ -85,7 +97,7 @@ def main():
             logger.info("Model compiled !")
 
     # Gradient scaler
-    scaler = torch.amp.GradScaler(device="cuda", enabled=(trainer.dtype == torch.bfloat16))
+    scaler = torch.amp.GradScaler(device=device, enabled=(trainer.dtype == torch.bfloat16))
 
     # Train the model
     trainer.train(

@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
-from typing import Tuple, Union
-import yaml
 
 
 class BaseDataLoader(ABC):
@@ -15,13 +13,6 @@ class BaseDataLoader(ABC):
         """
         self.batch_size = batch_size
         self.num_workers = num_workers
-
-    @classmethod
-    def init_from_config(cls, config: Union[dict, str]) -> Tuple["BaseDataLoader", dict]:
-        if isinstance(config, str):
-            with open(config, "r") as f:
-                config = yaml.load(f, Loader=yaml.FullLoader)
-        return cls(**config), config
 
     def setup(self):
         self.train_dataloader = self.setup_train_dataloader()

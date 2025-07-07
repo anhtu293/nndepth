@@ -4,9 +4,6 @@ from loguru import logger
 
 
 def add_common_args(parser: ArgumentParser) -> ArgumentParser:
-    parser.add_argument("--model_config", required=True, help="Path to model config file")
-    parser.add_argument("--data_config", required=True, help="Path to data config file")
-    parser.add_argument("--training_config", required=True, help="Path to training config file")
     parser.add_argument("--resume_from_checkpoint", default=None, help="Path to checkpoint to resume.")
     parser.add_argument("--compile", action="store_true", help="Compile the model.")
     return parser

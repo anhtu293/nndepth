@@ -30,7 +30,7 @@ The easiest way to set up the working environment is by using Docker. Follow the
 
 1. Build the Docker image:
    ```bash
-   cd docker && docker build -t nndepth .
+   cd docker && docker build -t nndepth -f Dockerfile.gpu .
    ```
 
 2. Launch the Docker container:
@@ -194,21 +194,11 @@ The tool generates a YAML configuration file that includes:
 - [x] Data processing script
 - [x] Inference script for Stereo module
 - [ ] More lightweight feature extractor with pretrained weights
-- [ ] Integrate more datasets: Sceneflow, KITTI, [SANPO](https://blog.research.google/2023/10/sanpo-scene-understanding-accessibility.html), etc
-- [ ] Implement evaluation script with some common metrics
-- [ ] [GM-Stereo: Unifying Flow, Stereo and Depth Estimation](https://arxiv.org/pdf/2211.05783.pdf)
-- [ ] [LEAStereo: Hierarchical Neural Architecture Search for Deep Stereo Matching](https://proceedings.neurips.cc/paper/2020/file/fc146be0b230d7e0a92e66a6114b840d-Paper.pdf)
-- [ ] [MobileStereoNet](https://arxiv.org/pdf/2108.09770.pdf)
-- [ ] [SCV-STEREO](https://arxiv.org/pdf/2107.08187.pdf)
-- [ ] [DCVNet](https://arxiv.org/pdf/2103.17271.pdf)
-- [ ] [LightStereo](https://arxiv.org/abs/2406.19833)
 - [ ] [MiDaS](https://arxiv.org/abs/1907.01341)
 - [ ] [ZoeDepth](https://arxiv.org/abs/2302.12288)
 - [ ] [Metric3D](https://jugghm.github.io/Metric3Dv2/)
 - [ ] [Unidepth](https://github.com/lpiccinelli-eth/unidepth)
 - [ ] [DepthAnything](https://arxiv.org/pdf/2401.10891)
-
-
 
 # Acknowledgements
 - [CreStereo](https://github.com/megvii-research/CREStereo)

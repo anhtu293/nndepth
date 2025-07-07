@@ -5,7 +5,6 @@ from torch import optim
 from abc import ABC, abstractmethod
 from typing import Union, Optional, Tuple
 from loguru import logger
-import yaml
 
 
 class BaseTrainer(ABC):
@@ -52,13 +51,6 @@ class BaseTrainer(ABC):
         self.current_steps = 0
 
         self.setup_workdir()
-
-    @classmethod
-    def init_from_config(cls, config: Union[dict, str]) -> Tuple["BaseTrainer", dict]:
-        if isinstance(config, str):
-            with open(config, "r") as f:
-                config = yaml.load(f, Loader=yaml.FullLoader)
-        return cls(**config), config
 
     def setup_workdir(self):
         """

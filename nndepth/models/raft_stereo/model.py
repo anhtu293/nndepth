@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Optional
 
 from nndepth.blocks.conv import MobileOneBlock, FeatureFusionBlock
 from nndepth.extractors.rep_vit import RepViT
@@ -11,10 +11,10 @@ from nndepth.models.raft_stereo.cost_volume import (
     CorrBlock1D,
     GroupCorrBlock1D,
 )
-from nndepth.utils import load_weights, BaseModel
+from nndepth.utils import load_weights
 
 
-class RAFTStereo(BaseModel):
+class RAFTStereo(nn.Module):
     """RAFT-Stereo: https://arxiv.org/pdf/2109.07547.pdf"""
 
     def __init__(
@@ -27,7 +27,7 @@ class RAFTStereo(BaseModel):
         corr_radius: int = 4,
         tracing: bool = False,
         include_preprocessing: bool = False,
-        weights: str = None,
+        weights: Optional[str] = None,
         strict_load: bool = True,
         **kwargs
     ):
@@ -97,7 +97,7 @@ class RAFTStereo(BaseModel):
         mask = mask.view(N, 1, 9, rate, rate, H, W)
         mask = torch.softmax(mask, dim=2)
 
-        up_disp = F.unfold(rate * flow, [3, 3], padding=1)
+        up_disp = F.unfold(rate * flow, (3, 3), padding=1)
         up_disp = up_disp.view(N, 1, 9, 1, 1, H, W)
 
         up_disp = torch.sum(mask * up_disp, dim=2)
@@ -167,15 +167,15 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
     def __init__(
         self,
         num_groups: int = 4,
-        downsample_ratios: List[Tuple[int, int]] = [[2, 2], [2, 2], [2, 2], [2, 2]],
+        downsample_ratios: List[Tuple[int, int]] = [(2, 2), (2, 2), (2, 2), (2, 2)],
         ffn_exp_ratios: List[float] = [1.0, 3.0, 3.0, 4.0],
         num_blocks_per_stage: List[int] = [4, 4, 6, 2],
         patch_size: int = 7,
-        stem_strides: List[int] = [[2, 2], [2, 2], [1, 1]],
+        stem_strides: List[Tuple[int, int]] = [(2, 2), (2, 2), (1, 1)],
         token_mixer_types: List[str] = ["repmixer", "repmixer", "repmixer", "attention"],
         use_ffn_per_stage: List[bool] = [False, True, True, True],
-        width_multipliers: List[float] = [1.0, 1.0, 1.0, 1.0],
-        weights: str = None,
+        width_multipliers: List[int] = [1, 1, 1, 1],
+        weights: Optional[str] = None,
         strict_load: bool = True,
         **kwargs
     ):
@@ -262,7 +262,7 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
         mask = mask.view(N, 1, 9, rate[0], rate[1], H, W)
         mask = torch.softmax(mask, dim=2)
 
-        up_disp = F.unfold(rate[1] * flow, [3, 3], padding=1)
+        up_disp = F.unfold(rate[1] * flow, (3, 3), padding=1)
         up_disp = up_disp.view(N, 1, 9, 1, 1, H, W)
 
         up_disp = torch.sum(mask * up_disp, dim=2)
@@ -272,7 +272,7 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
     def forward(self, frame1: torch.Tensor, frame2: torch.Tensor, **kwargs):
         B = frame1.shape[0]
 
-        features = self.fnet(torch.cat([frame1, frame2], axis=0))[::2]
+        features = self.fnet(torch.cat([frame1, frame2], dim=0))[::2]
         features = features[::-1]
         init_coords = self.initialize_coords(torch.split(features[0], [B, B], dim=0)[0])
         org_coords = self.initialize_coords(torch.split(features[0], [B, B], dim=0)[0])
