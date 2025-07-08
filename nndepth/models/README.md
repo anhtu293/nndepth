@@ -1,6 +1,6 @@
-# Stereo Depth Estimation
+# Depth Estimation Models
 
-This module is used to implement - train - inference different neural networks for Depth estimation. The models are implemented in `pytorch`.
+This module is used to implement - train - inference different neural networks for depth estimation. The models are implemented in `pytorch`.
 
 <p align="center">
   <img src="../../images/tartanair_disp.png"/>
