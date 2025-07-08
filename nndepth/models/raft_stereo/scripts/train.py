@@ -2,117 +2,84 @@ import os
 import argparse
 import sys
 import torch
-import torch.optim as optim
-import torch.optim.lr_scheduler as lr_scheduler
-from torch.distributed import init_process_group, destroy_process_group, get_world_size
+import torch.nn as nn
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
 from loguru import logger
 from typing import Union
 
 from nndepth.data.dataloaders import TartanairDisparityDataLoader
-from nndepth.utils.trackers.wandb import WandbTracker
-from nndepth.utils.distributed_training import is_distributed_training
-from nndepth.models.raft_stereo import RAFTLoss, RAFTTrainer
+from nndepth.models.raft_stereo import RAFTTrainer
 from nndepth.models.raft_stereo.configs import BaseRAFTTrainingConfig, RepViTRAFTStereoTrainingConfig
 from nndepth.models.raft_stereo.model import BaseRAFTStereo, Coarse2FineGroupRepViTRAFTStereo
 
 
 def main():
-
-    TRAINING_CONFIGS = {
-        "base_raft_stereo": BaseRAFTTrainingConfig,
-        "coarse2fine_group_repvit_raft_stereo": RepViTRAFTStereoTrainingConfig,
-    }
-    MODEL_CONFIGS = {
-        "base_raft_stereo": BaseRAFTStereo,
-        "coarse2fine_group_repvit_raft_stereo": Coarse2FineGroupRepViTRAFTStereo,
+    NAME_TO_CONFIGS_MODEL = {
+        "base": {
+            "training_config": BaseRAFTTrainingConfig,
+            "model": BaseRAFTStereo,
+        },
+        "repvit": {
+            "training_config": RepViTRAFTStereoTrainingConfig,
+            "model": Coarse2FineGroupRepViTRAFTStereo,
+        },
     }
     model_name = sys.argv[1]
-    assert model_name in TRAINING_CONFIGS, f"Model {model_name} not found"
-    training_config = TRAINING_CONFIGS[model_name]
+    assert (
+        model_name in NAME_TO_CONFIGS_MODEL
+    ), f"Model {model_name} not found. Available models: {NAME_TO_CONFIGS_MODEL.keys()}"
+
+    training_config_cls = NAME_TO_CONFIGS_MODEL[model_name]["training_config"]
+    model_cls = NAME_TO_CONFIGS_MODEL[model_name]["model"]
 
     parser = argparse.ArgumentParser()
-    training_config.add_args(parser)
-    args = parser.parse_args()
+    training_config_cls.add_args(parser)
+    parser.add_argument("--compile", action="store_true", help="Compile the model")
+    parser.add_argument("--save_config", default=None, help="Save the training config to a file")
+    args = parser.parse_args(sys.argv[2:])
 
-    training_config: Union[BaseRAFTTrainingConfig, RepViTRAFTStereoTrainingConfig] = training_config.from_args(args)
+    # Parse training config
+    training_config: Union[BaseRAFTTrainingConfig, RepViTRAFTStereoTrainingConfig] = training_config_cls.from_args(args)
 
-    dataloader = TartanairDisparityDataLoader(**training_config.data.to_dict())
-    trainer = RAFTTrainer(**training_config.trainer.to_dict())
-    model = MODEL_CONFIGS[model_name](**training_config.model.to_dict())
-
+    if args.save_config:
+        training_config.save(args.save_config)
+        logger.info(f"Training config saved to {args.save_config}")
+        return
 
     # Init data loader
+    dataloader = TartanairDisparityDataLoader(**training_config.data.to_dict())
     dataloader.setup()
 
-    # Init loss, optimizer, scheduler
-    criterion = RAFTLoss(gamma=0.8, max_flow=1000)
-    optimizer = optim.AdamW(model.parameters(), lr=trainer.lr, weight_decay=trainer.weight_decay, eps=trainer.epsilon)
-    scheduler = lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=trainer.lr,
-        total_steps=trainer.max_steps + 100,
-        anneal_strategy="linear",
-        pct_start=0.05,
-        cycle_momentum=False,
-    )
+    # Init distributed training
+    model: nn.Module = model_cls(**training_config.model.to_dict())
+    model.cuda()
 
-    # Init tracker
-    grouped_configs = {"model": training_config.model.to_dict(), "data": training_config.data.to_dict(), "training": training_config.trainer.to_dict()}
-    wandb_tracker = WandbTracker(
-        project_name=training_config.trainer.project_name,
-        run_name=training_config.trainer.experiment_name,
-        root_log_dir=training_config.trainer.workdir,
-        config=grouped_configs,
-    )
-
-    # Resume from checkpoint if required
-    if args.resume_from_checkpoint is not None:
-        trainer.resume_from_checkpoint(args.resume_from_checkpoint, model, optimizer, scheduler)
-
-    if is_distributed_training():
+    with_ddp = torch.cuda.device_count() > 1
+    if with_ddp:
         init_process_group(backend="nccl")
         ddp_local_rank = os.environ.get("LOCAL_RANK", 0)
-        device = f"cuda:{ddp_local_rank}"
         torch.cuda.set_device(int(ddp_local_rank))
-        model = model.to(device)
+        model = DDP(model, device_ids=[int(ddp_local_rank)])
         if args.compile:
             logger.info("Compiling model ...")
-            model = torch.compile(model)
+            model.compile(model)
             logger.info("Model compiled !")
 
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(ddp_local_rank)])
         logger.info(f"Model DDP initialized on device {ddp_local_rank}")
-
-        if training_config.trainer.max_steps is not None:
-            assert (
-                training_config.trainer.max_steps % get_world_size() == 0
-            ), "max_steps must be divisible by the number of GPUs"
-            training_config.trainer.max_steps = training_config.trainer.max_steps // get_world_size()
     else:
-        model = model.to(torch.device("cuda"))
-        device = "cuda:0"
         if args.compile:
             logger.info("Compiling model ...")
-            model = torch.compile(model)
+            model.compile(model)
             logger.info("Model compiled !")
 
-    # Gradient scaler
-    scaler = torch.amp.GradScaler(device=device, enabled=(trainer.dtype == torch.bfloat16))
+    # Init trainer
+    trainer = RAFTTrainer(model, **training_config.trainer.to_dict(), training_config=training_config.to_dict())
 
     # Train the model
-    trainer.train(
-        model,
-        criterion,
-        dataloader.train_dataloader,
-        dataloader.val_dataloader,
-        optimizer,
-        scheduler,
-        scaler,
-        wandb_tracker,
-        device,
-    )
+    trainer.train(model, dataloader.train_dataloader, dataloader.val_dataloader)
 
-    if is_distributed_training():
+    if with_ddp:
         destroy_process_group()
 
 

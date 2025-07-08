@@ -3,14 +3,13 @@ Configuration classes for RAFT Stereo model.
 These classes inherit from BaseConfiguration and use type annotations for automatic CLI generation.
 """
 
-from typing import Annotated, List, Optional, Tuple
-from nndepth.utils import BaseConfiguration
+from typing import Annotated, List, Optional, Tuple, Union
+from nndepth.utils import BaseConfiguration, BaseDataloaderConfig, BaseTrainingConfig
 
 
 class BaseRAFTStereoModelConfig(BaseConfiguration):
     """Configuration for RAFT Stereo model parameters."""
 
-    # Type annotations automatically generate CLI arguments
     iters: int = 12
     fnet_dim: int = 256
     hidden_dim: int = 128
@@ -23,14 +22,11 @@ class BaseRAFTStereoModelConfig(BaseConfiguration):
     strict_load: bool = True
 
 
-class TartanairDataConfig(BaseConfiguration):
+class TartanairDataConfig(BaseDataloaderConfig):
     """Configuration for TartanAir dataset."""
 
-    # Type annotations automatically generate CLI arguments
     dataset_dir: Annotated[str, "Path to the TartanAir dataset"] = "/data/tartanair"
     HW: Annotated[List[int], "Height and width of the images"] = [480, 640]
-    batch_size: Annotated[int, "Batch size for training"] = 6
-    num_workers: Annotated[int, "Number of workers for data loading"] = 8
     train_envs: List[str] = [
         "abandonedfactory", "amusement", "carwelding", "endofworld", "gascola",
         "hospital", "japanesealley", "neighborhood", "ocean", "office", "office2",
@@ -40,23 +36,14 @@ class TartanairDataConfig(BaseConfiguration):
     val_envs: List[str] = ["abandonedfactory_night"]
 
 
-class RAFTTrainerConfig(BaseConfiguration):
+class RAFTTrainerConfig(BaseTrainingConfig):
     """Configuration for RAFT Stereo trainer."""
 
-    # Type annotations automatically generate CLI arguments
     lr: Annotated[float, "Learning rate for training"] = 0.0001
-    num_epochs: Annotated[int, "Number of epochs for training"] = 100
-    max_steps: Annotated[int, "Maximum number of steps for training"] = 100000
     weight_decay: Annotated[float, "Weight decay for training"] = 0.0001
     epsilon: Annotated[float, "Epsilon for optimizer"] = 1e-08
-    gradient_accumulation_steps: Annotated[int, "Number of gradient accumulation steps"] = 4
-    workdir: Annotated[str, "Path to the working directory"] = "/weights"
-    project_name: Annotated[str, "Name of the project"] = "raft_stereo"
-    experiment_name: Annotated[str, "Name of the experiment"] = "BaseRaftStereo"
-    val_interval: Annotated[float, "Validation interval"] = 10.0
-    log_interval: Annotated[int, "Logging interval"] = 50
-    num_val_samples: Annotated[int, "Number of validation samples"] = 10
-    save_best_k_cp: Annotated[int, "Number of best checkpoints to save"] = 3
+    dtype: Annotated[str, "Data type for training"] = "bfloat16"
+    device: Annotated[str, "Device for training"] = "cuda"
 
 
 class Coarse2FineGroupRepViTRAFTStereoModelConfig(BaseRAFTStereoModelConfig):
@@ -81,7 +68,7 @@ class BaseRAFTTrainingConfig(BaseConfiguration):
     trainer: Annotated[RAFTTrainerConfig, "Trainer configuration"] = RAFTTrainerConfig()
 
 
-class RepViTRAFTStereoTrainingConfig(BaseRAFTTrainingConfig):
+class RepViTRAFTStereoTrainingConfig(BaseConfiguration):
     """Configuration for RepViTRAFTStereo training."""
 
     model: Annotated[Coarse2FineGroupRepViTRAFTStereoModelConfig, "Model configuration"] = Coarse2FineGroupRepViTRAFTStereoModelConfig()

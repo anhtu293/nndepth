@@ -1,49 +1,7 @@
-"""
-BaseConfiguration class for creating hybrid configuration systems.
-
-This class supports:
-- Loading from YAML files
-- Command line argument generation and parsing
-- Nested configurations
-- Type annotations with automatic CLI generation
-- Custom help messages using typing.Annotated
-
-Example:
-    from typing import Annotated
-    from nndepth.utils import BaseConfiguration
-
-    class ModelConfig(BaseConfiguration):
-        lr: Annotated[float, "Learning rate for training"] = 0.001
-        batch_size: Annotated[int, "Number of samples per batch"] = 32
-        debug: bool = False
-
-    # Automatically generates CLI arguments:
-    # --lr: Learning rate for training (default: 0.001)
-    # --batch_size: Number of samples per batch (default: 32)
-    # --debug, --no-debug: Set debug. (default: False)
-
-    # Usage:
-    parser = argparse.ArgumentParser()
-    ModelConfig.add_args(parser)
-    args = parser.parse_args()
-    config = ModelConfig.from_args(args)
-"""
-
 import argparse
 from argparse import BooleanOptionalAction
 import yaml
-from typing import Dict, Any, Optional, get_type_hints, get_origin, List, get_args
-
-# Import Annotated with fallback for older Python versions
-try:
-    from typing import Annotated  # type: ignore
-except ImportError:
-    try:
-        from typing_extensions import Annotated  # type: ignore
-    except ImportError:
-        # Annotated not available - will be handled gracefully in usage
-        Annotated = None  # type: ignore
-
+from typing import Dict, Any, Optional, get_type_hints, get_origin, List, get_args, Annotated
 from loguru import logger
 
 
@@ -76,8 +34,57 @@ class BaseConfiguration:
 
     def __init__(self, **kwargs):
         """Initialize configuration with keyword arguments."""
+        # First, initialize all fields with their default values from class definition
+        self._init_default_values()
+
+        # Then override with any provided kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    def _init_default_values(self):
+        """Initialize all fields with their default values from class definition."""
+        # Get type hints to identify all fields (includes inherited fields)
+        type_hints = get_type_hints(self.__class__)
+
+        # Collect all annotations from the inheritance chain
+        all_annotations = {}
+        for cls in reversed(self.__class__.__mro__):
+            if cls is BaseConfiguration or not issubclass(cls, BaseConfiguration):
+                continue
+
+            # Get raw annotations for this class to preserve Annotated metadata
+            cls_annotations = getattr(cls, '__annotations__', {})
+            all_annotations.update(cls_annotations)
+
+        for attr_name in all_annotations:
+            if attr_name.startswith('_'):  # Skip private attributes
+                continue
+
+            # Get the default value from the class
+            if hasattr(self.__class__, attr_name):
+                default_value = getattr(self.__class__, attr_name)
+
+                # Check if this is a nested BaseConfiguration
+                resolved_type = type_hints.get(attr_name, all_annotations[attr_name])
+
+                # Handle Annotated types
+                if hasattr(all_annotations[attr_name], '__metadata__'):
+                    args = get_args(all_annotations[attr_name])
+                    if args:
+                        resolved_type = args[0]
+
+                is_nested_config = (isinstance(resolved_type, type) and
+                                    issubclass(resolved_type, BaseConfiguration))
+
+                if is_nested_config:
+                    # For nested configurations, create a new instance if default is a class
+                    if isinstance(default_value, type):
+                        default_value = default_value()
+                    # If it's already an instance, create a copy to avoid shared state
+                    elif isinstance(default_value, BaseConfiguration):
+                        default_value = default_value.__class__(**default_value.to_dict())
+
+                setattr(self, attr_name, default_value)
 
     @classmethod
     def from_yaml(cls, yaml_path: str):
@@ -269,22 +276,30 @@ class BaseConfiguration:
         """
         args_info = []
 
-        # Get raw annotations to preserve Annotated metadata
-        raw_annotations = getattr(cls, '__annotations__', {})
-        # Get resolved type hints for nested config detection
+        # Collect all annotations from the inheritance chain
+        all_annotations = {}
+        for parent_cls in reversed(cls.__mro__):
+            if parent_cls is BaseConfiguration or not issubclass(parent_cls, BaseConfiguration):
+                continue
+
+            # Get raw annotations for this class to preserve Annotated metadata
+            cls_annotations = getattr(parent_cls, '__annotations__', {})
+            all_annotations.update(cls_annotations)
+
+        # Get resolved type hints for nested config detection (includes inherited fields)
         type_hints = get_type_hints(cls)
 
         # Get default values by creating a temporary instance
         temp_instance = cls()
 
-        for attr_name in raw_annotations:
+        for attr_name in all_annotations:
             if attr_name.startswith('_'):  # Skip private attributes
                 continue
 
             current_path = f"{path}.{attr_name}" if path else attr_name
 
             # Get the raw annotation (preserves Annotated metadata)
-            raw_type = raw_annotations[attr_name]
+            raw_type = all_annotations[attr_name]
             # Get the resolved type for nested config detection
             resolved_type = type_hints.get(attr_name, raw_type)
 
@@ -484,7 +499,7 @@ class BaseConfiguration:
 
         return result
 
-    def save_yaml(self, yaml_path: str):
+    def save(self, yaml_path: str):
         """Save configuration to YAML file."""
         with open(yaml_path, "w") as f:
             yaml.dump(self.to_dict(), f, sort_keys=False, default_flow_style=False)
@@ -530,3 +545,30 @@ class BaseConfiguration:
 
         if indent == 0:
             logger.info("")
+
+
+class BaseTrainingConfig(BaseConfiguration):
+    """
+    Base training configuration class.
+    """
+    workdir: Annotated[str, "Path to the working directory"] = "/home/cv/nndepth/experiments"
+    project_name: Annotated[str, "Name of the project"] = "nndepth"
+    experiment_name: Annotated[str, "Name of the experiment"] = "default"
+    num_epochs: Annotated[Optional[int], "Number of epochs to train"] = 100
+    max_steps: Annotated[Optional[int], "Number of steps to train"] = None
+    gradient_accumulation_steps: Annotated[int, "Number of steps to accumulate gradients"] = 1
+    val_interval: Annotated[float, "Validation interval"] = 1.0
+    log_interval: Annotated[int, "Logging interval"] = 100
+    num_val_samples: Annotated[int, "Number of validation samples"] = -1
+    save_best_k_cp: Annotated[int, "Number of best checkpoints to save"] = 3
+    tracker: Annotated[str, "Name of the tracker to use"] = "wandb"
+    checkpoint: Annotated[Optional[str], "Path to the checkpoint to resume from"] = None
+    resume: Annotated[bool, "Whether to resume from the checkpoint"] = False
+
+
+class BaseDataloaderConfig(BaseConfiguration):
+    """
+    Base dataloader configuration class.
+    """
+    batch_size: Annotated[int, "Number of samples per batch"] = 5
+    num_workers: Annotated[int, "Number of workers for data loading"] = 8

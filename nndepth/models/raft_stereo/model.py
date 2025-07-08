@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from typing import Union, Tuple, List, Optional
 
 from nndepth.blocks.conv import MobileOneBlock, FeatureFusionBlock
-from nndepth.extractors.rep_vit import RepViT
-from nndepth.extractors.basic_encoder import BasicEncoder
+from nndepth.encoders.rep_vit import RepViT
+from nndepth.encoders.basic_encoder import BasicEncoder
 from nndepth.blocks.update_block import BasicUpdateBlock
 from nndepth.models.raft_stereo.cost_volume import (
     CorrBlock1D,
@@ -199,7 +199,7 @@ class Coarse2FineGroupRepViTRAFTStereo(RAFTStereo):
 
             For `num_groups`, `downsample_ratios`, `ffn_exp_ratios`, `num_blocks_per_stage`, `stem_strides`,
                 `token_mixer_types`, `use_ffn_per_stage`, `width_multipliers`,
-                Please refer to `nndepth.extractors.rep_vit.RepViT` for detail implementation.
+                Please refer to `nndepth.encoders.rep_vit.RepViT` for detail implementation.
         """
         self.num_groups = num_groups
         self.downsample_ratios = downsample_ratios

@@ -13,7 +13,7 @@ from typing import Optional, Tuple, Callable, Dict, List
 from nndepth.scene import Frame, Disparity
 from nndepth.utils.base_trainer import BaseTrainer
 from nndepth.utils.trackers.wandb import WandbTracker
-from nndepth.utils import is_distributed_training, is_main_process
+from nndepth.utils import is_dist_initialized, is_main_process
 
 
 class IGEVStereoTrainer(BaseTrainer):
@@ -235,12 +235,12 @@ class IGEVStereoTrainer(BaseTrainer):
                         }
                     )
 
-                    if is_distributed_training():
+                    if is_dist_initialized():
                         model_state_dict = getattr(model.module, '_orig_mod', model.module).state_dict()
                     else:
                         model_state_dict = getattr(model, '_orig_mod', model).state_dict()
 
-                    if (is_distributed_training() and is_main_process()) or not is_distributed_training():
+                    if (is_dist_initialized() and is_main_process()) or not is_dist_initialized():
                         # Save checkpoint if best
                         topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
                             epoch, self.current_steps, results["loss"], "loss", condition="min"
@@ -278,7 +278,7 @@ class IGEVStereoTrainer(BaseTrainer):
                     logger.info("Training finished. Save the last checkpoint")
                     self.save_checkpoint(
                         os.path.join(self.artifact_dir, self.get_latest_checkpoint_name(self.current_steps)),
-                        model.module.state_dict() if is_distributed_training() else model.state_dict(),
+                        model.module.state_dict() if is_dist_initialized() else model.state_dict(),
                         optimizer.state_dict(),
                         scheduler.state_dict(),
                     )

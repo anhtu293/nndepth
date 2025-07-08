@@ -21,7 +21,7 @@
 #
 #             For `num_groups`, `downsample_ratios`, `ffn_exp_ratios`, `num_blocks_per_stage`, `stem_strides`,
 #                 `token_mixer_types`, `use_ffn_per_stage`, `width_multipliers`,
-#                 Please refer to `nndepth.extractors.rep_vit.RepViT` for detail implementation.
+#                 Please refer to `nndepth.encoders.rep_vit.RepViT` for detail implementation.
 #
 num_groups: 4
 downsample_ratios:

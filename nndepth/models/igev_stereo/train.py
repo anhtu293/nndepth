@@ -9,7 +9,7 @@ from loguru import logger
 from nndepth.data.dataloaders import TartanairDisparityDataLoader
 from nndepth.utils import add_common_args
 from nndepth.utils.trackers.wandb import WandbTracker
-from nndepth.utils.distributed_training import is_distributed_training
+from nndepth.utils.distributed_training import is_dist_initialized
 from nndepth.models.igev_stereo import STEREO_MODELS, IGEVStereoLoss, IGEVStereoTrainer
 
 
@@ -57,7 +57,7 @@ def main():
     if args.resume_from_checkpoint is not None:
         trainer.resume_from_checkpoint(args.resume_from_checkpoint, model, optimizer, scheduler)
 
-    if is_distributed_training():
+    if is_dist_initialized():
         init_process_group(backend="nccl")
         ddp_local_rank = os.environ.get("LOCAL_RANK", 0)
         device = f"cuda:{ddp_local_rank}"
@@ -100,7 +100,7 @@ def main():
         device,
     )
 
-    if is_distributed_training():
+    if is_dist_initialized():
         destroy_process_group()
 
 

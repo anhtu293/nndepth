@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
 
-from nndepth.extractors.mobilenetv3_encoder import MobilenetV3LargeEncoder
+from nndepth.encoders.mobilenetv3_encoder import MobilenetV3LargeEncoder
 from nndepth.blocks.update_block import BasicUpdateBlock
 from nndepth.models.igev_stereo.cost_volume import (
     GeometryAwareCostVolume,

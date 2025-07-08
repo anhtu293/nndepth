@@ -39,7 +39,7 @@ class WandbTracker(object):
         if root_log_dir is None:
             self.log_dir = os.path.join("wandb", self.project_name, self.run_name, "wandb")
         else:
-            self.log_dir = os.path.join(root_log_dir, "wandb")
+            self.log_dir = os.path.join(root_log_dir, self.project_name, self.run_name, "wandb")
         os.makedirs(self.log_dir, exist_ok=True)
 
         run_unique_id = wandb.util.generate_id()
@@ -73,11 +73,13 @@ class WandbTracker(object):
         wandb.define_metric("train/*", step_metric="train/step")
         wandb.define_metric("val/*", step_metric="train/step")
 
-    def log(self, data: dict):
+    def log(self, data: dict, step: int):
         """
         Log data to wandb
 
         Parameters
             data (dict): Data to log
+            step (int): Step
         """
+        data["train/step"] = step
         self.run.log(data)

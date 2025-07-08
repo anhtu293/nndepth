@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from nndepth.blocks.update_block import BasicUpdateBlock
-from nndepth.extractors.basic_encoder import BasicEncoder
+from nndepth.encoders.basic_encoder import BasicEncoder
 from nndepth.models.cre_stereo.cost_volume import AGCL
 
 from nndepth.blocks.pos_enc import PositionEncodingSine

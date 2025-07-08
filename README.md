@@ -79,7 +79,7 @@ The project is organized into several key modules, each serving a specific purpo
 
 4. **disparity**: Encompasses modules for training and inferencing various neural networks specifically designed for stereo depth estimation. Read this [documentation](nndepth/disparity/README.md) for details.
 
-5. **extractors**: Contains backbone architectures used as feature extractors in depth estimation models.
+5. **encoders**: Contains backbone architectures used as feature encoders in depth estimation models.
 
 6. **models**: Implements complete depth estimation models, integrating components from other modules.
 

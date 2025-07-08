@@ -6,7 +6,7 @@ from nndepth.scene import Frame
 from nndepth.utils.base_dataloader import BaseDataLoader
 from nndepth.data.datasets import TartanairDataset
 
-from nndepth.utils import is_distributed_training
+from nndepth.utils import is_dist_initialized
 
 
 class TartanairDisparityDataLoader(BaseDataLoader):
@@ -71,7 +71,7 @@ class TartanairDisparityDataLoader(BaseDataLoader):
             labels=["disparity"],
         )
         sampler = (
-            DistributedSampler(self.train_dataset) if is_distributed_training() else RandomSampler(self.train_dataset)
+            DistributedSampler(self.train_dataset) if is_dist_initialized() else RandomSampler(self.train_dataset)
         )
         dataloader = DataLoader(
             self.train_dataset,
@@ -91,7 +91,7 @@ class TartanairDisparityDataLoader(BaseDataLoader):
             labels=["disparity"],
         )
         sampler = (
-            DistributedSampler(self.val_dataset) if is_distributed_training() else RandomSampler(self.val_dataset)
+            DistributedSampler(self.val_dataset) if is_dist_initialized() else RandomSampler(self.val_dataset)
         )
         dataloader = DataLoader(
             self.val_dataset,
