@@ -2,56 +2,51 @@ import os
 import shutil
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
+import torch.distributed as dist
 import numpy as np
 from torch.utils.data import DataLoader
-import torch.optim as optim
 from loguru import logger
 from tqdm import tqdm
 import wandb
-from typing import Optional, Tuple, Callable, Dict, List
+from typing import Tuple, Dict, List
 
 from nndepth.scene import Frame, Disparity
 from nndepth.utils.base_trainer import BaseTrainer
-from nndepth.utils.trackers.wandb import WandbTracker
-from nndepth.utils import is_dist_initialized, is_main_process
+from nndepth.models.cre_stereo.loss import CREStereoLoss
+from nndepth.utils.distributed_training import is_main_process, is_dist_initialized
+from nndepth.utils.common import get_model_state_dict
 
 
 class CREStereoTrainer(BaseTrainer):
     def __init__(
         self,
+        model: nn.Module,
         lr: float = 0.0001,
-        num_epochs: Optional[int] = 100,
-        max_steps: Optional[int] = 100000,
         weight_decay: float = 0.0001,
         epsilon: float = 1e-8,
         dtype: str = "bfloat16",
-        gradient_accumulation_steps: Optional[int] = 1,
+        device: torch.device = torch.device("cuda"),
         **kwargs,
     ):
         """
         Trainer for CRE Stereo Model
 
         Args:
+            model (nn.Module): model to train
             lr (float): learning rate
-            max_steps (int): number of steps to train
-            num_epochs (int): number of epochs to train
             weight_decay (float): weight decay
             epsilon (float): epsilon for Adam optimizer
-            gradient_accumulation_steps (int): number of steps to accumulate gradients
             dtype (str): data type for training
+            device (torch.device): device to train on
         """
-        assert num_epochs is not None or max_steps is not None, "Either num_epochs or max_steps must be provided"
-        assert (
-            gradient_accumulation_steps is None or gradient_accumulation_steps > 0
-        ), "gradient_accumulation_steps must be greater than 0"
-
         super().__init__(**kwargs)
+        self.model = model
         self.lr = lr
-        self.num_epochs = num_epochs
-        self.max_steps = max_steps
         self.weight_decay = weight_decay
         self.epsilon = epsilon
-        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.device = device
         if dtype == "bfloat16":
             if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
                 self.dtype = torch.bfloat16
@@ -61,16 +56,45 @@ class CREStereoTrainer(BaseTrainer):
         else:
             self.dtype = dtype
 
+        # Init loss, optimizer, scheduler
+        self.criterion = CREStereoLoss(gamma=0.8, max_flow=1000)
+        self.optimizer = optim.AdamW(
+            model.parameters(),
+            lr=lr,
+            weight_decay=weight_decay,
+            eps=epsilon,
+        )
+        # Gradient scaler
+        self.scaler = torch.amp.GradScaler(enabled=(self.dtype == torch.bfloat16))
+        if self.max_steps is not None:
+            self.scheduler = lr_scheduler.OneCycleLR(
+                self.optimizer,
+                max_lr=lr,
+                total_steps=self.max_steps + 100,
+                anneal_strategy="linear",
+                pct_start=0.05,
+                cycle_momentum=False,
+            )
+
+        if self.resume:
+            self.resume_from_checkpoint(
+                {"model": self.model},
+                {"optimizer": self.optimizer, "scheduler": self.scheduler},
+                use_safetensors={"model": False, "optimizer": False, "scheduler": False},
+                load_args={"model": {"strict": True}},
+                device=self.device,
+            )
+
     @torch.no_grad()
     def predict_and_get_visualization(
-        self, model: nn.Module, sample: Dict[str, List[Frame]], device: str
+        self, model: nn.Module, sample: Dict[str, List[Frame]]
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Get visualization of 1 example for debugging purposes
 
         Args:
             model (nn.Module): model
-            val_dataloader (DataLoader): validation data loader
+            sample (Dict[str, List[Frame]]): sample batch
 
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: left image, ground truth disparity, predicted disparity
@@ -79,7 +103,7 @@ class CREStereoTrainer(BaseTrainer):
 
         left_tensor, right_tensor = left_frame.data[None], right_frame.data[None]
         with torch.amp.autocast(device_type="cuda", dtype=self.dtype):
-            m_outputs = model(left_tensor.to(device), right_tensor.to(device))
+            m_outputs = model(left_tensor.to(self.device), right_tensor.to(self.device))
             disp_pred = m_outputs[-1]["up_disp"][0]
             disp_pred = Disparity(data=disp_pred, disp_sign="negative")
 
@@ -94,202 +118,198 @@ class CREStereoTrainer(BaseTrainer):
 
         return left_image, disp_gt_image, disp_pred_image
 
-    def process_input(self, batch: List[Frame], device: str) -> Tuple[torch.Tensor, torch.Tensor]:
+    def process_input(self, batch: List[Frame]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Assert the input frames
 
         Args:
-            left_frame (Frame): left frame
-            right_frame (Frame): right frame
+            batch (List[Frame]): batch of frames
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: processed frames and labels
         """
         frames = [f.data for f in batch]
         if batch[0].disparity is not None:
             labels = [f.disparity.data for f in batch]
         else:
             labels = None
-        frames = torch.stack(frames, dim=0).to(device)
+        frames = torch.stack(frames, dim=0).to(self.device)
         if labels is not None:
-            labels = torch.stack(labels, dim=0).to(device)
+            labels = torch.stack(labels, dim=0).to(self.device)
         return frames, labels
+
+    def save_topk_checkpoint(self, results: dict):
+        """
+        Save topk checkpoint
+
+        Args:
+            results (dict): results of the evaluation
+        """
+        model_state_dict = get_model_state_dict(self.model)
+        optimizer_state_dict = self.optimizer.state_dict()
+        scheduler_state_dict = self.scheduler.state_dict()
+
+        # Save checkpoint if best
+        topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
+            results["loss"], "loss", condition="min"
+        )
+        if topk_cp_dir:
+            logger.info(
+                f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints."
+                + f" Saving at {os.path.join(self.artifact_dir, topk_cp_dir)}."
+            )
+
+            self.save_checkpoint(
+                os.path.join(self.artifact_dir, topk_cp_dir),
+                {"model": model_state_dict, "optimizer": optimizer_state_dict, "scheduler": scheduler_state_dict},
+                use_safetensors={"model": False, "optimizer": False, "scheduler": False},
+            )
+
+            if old_topk_cp:
+                logger.info(f"Removing old checkpoint {os.path.join(self.artifact_dir, old_topk_cp)}.")
+                shutil.rmtree(os.path.join(self.artifact_dir, old_topk_cp))
+
+        # Remove old checkpoint & Save latest checkpoint
+        old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
+        if old_latest_cp_dir:
+            logger.info(f"Removing old latest checkpoint {os.path.join(self.artifact_dir, old_latest_cp_dir)}...")
+            shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
+        latest_cp_dir = self.get_latest_checkpoint_name(self.current_step)
+
+        self.save_checkpoint(
+            os.path.join(self.artifact_dir, latest_cp_dir),
+            {"model": model_state_dict, "optimizer": optimizer_state_dict, "scheduler": scheduler_state_dict},
+            use_safetensors={"model": False, "optimizer": False, "scheduler": False},
+        )
+        logger.info(f"Saved latest checkpoint {latest_cp_dir}.")
 
     def train(self,
               model: nn.Module,
-              criterion: Callable,
               train_dataloader: DataLoader,
               val_dataloader: DataLoader,
-              optimizer: optim.Optimizer,
-              scheduler: optim.lr_scheduler._LRScheduler,
-              scaler: torch.cuda.amp.GradScaler,
-              tracker: WandbTracker,
-              device: str,
               ) -> None:
         """
         Train the model
 
         Args:
             model (nn.Module): model to train
-            criterion (Callable): criterion function
             train_dataloader (DataLoader): training data loader
             val_dataloader (DataLoader): validation data loader
-            optimizer (optim.Optimizer): optimizer
-            scheduler (optim.lr_scheduler._LRScheduler): scheduler
-            tracker (WandbTracker): tracker
         """
         logger.info("Start training")
 
         if self.max_steps is not None:
             self.num_epochs = self.max_steps // (len(train_dataloader) // self.gradient_accumulation_steps) + 1
         elif self.num_epochs is not None:
-            self.max_steps = len(train_dataloader) * self.num_epochs
+            self.max_steps = len(train_dataloader) * self.num_epochs // self.gradient_accumulation_steps
 
-        # Placeholders for metrics
-        losses = []
-        l_epe = []
-        l_percent_0_5 = []
-        l_percent_1 = []
-        l_percent_3 = []
-        l_percent_5 = []
+        if is_main_process():
+            pbar = tqdm(total=len(train_dataloader))
+            desc = "Epoch {current_epoch}/{num_epochs} - Step {current_step}/{max_steps} - Loss: {loss:.4f}"
 
-        current_epoch = self.current_steps * self.gradient_accumulation_steps // len(train_dataloader)
-        if isinstance(self.val_interval, int):
-            val_interval_steps = self.val_interval
-        elif isinstance(self.val_interval, float) and self.val_interval <= 1:
-            val_interval_steps = int(self.val_interval * len(train_dataloader))
-        else:
-            raise ValueError("val_interval must be either int or float <= 1")
-
+        training_metrics = {"loss": []}
         loss = torch.Tensor([0])
-        for epoch in range(current_epoch, self.num_epochs):
-            pbar = tqdm(train_dataloader, desc=f"Epoch {epoch}/{self.num_epochs}")
-            for i_batch, batch in enumerate(pbar):
-                pbar.set_postfix_str(f"Loss: {loss.item():.4f}")
-                left_frames, left_labels = self.process_input(batch["left"], device)
-                right_frames, _ = self.process_input(batch["right"], device)
+        for epoch in range(self.current_epoch, self.num_epochs):
+            self.current_epoch = epoch
+            pbar.reset()
+            for i_batch, batch in enumerate(train_dataloader):
+                if is_main_process():
+                    pbar.update(1)
+                    pbar.set_description(
+                        desc.format(
+                            current_epoch=epoch,
+                            num_epochs=self.num_epochs,
+                            current_step=self.current_step,
+                            max_steps=self.max_steps,
+                            loss=loss.item(),
+                        )
+                    )
+
+                left_frames, left_labels = self.process_input(batch["left"])
+                right_frames, _ = self.process_input(batch["right"])
 
                 with torch.amp.autocast(device_type="cuda", dtype=self.dtype):
                     outputs = model(left_frames, right_frames)
-                    loss, metrics = criterion(left_labels, outputs)
+                    loss, metrics = self.criterion(left_labels, outputs)
                     loss = loss / self.gradient_accumulation_steps
 
-                scaler.scale(loss).backward()
+                self.scaler.scale(loss).backward()
 
                 if (i_batch + 1) % self.gradient_accumulation_steps == 0:
-                    scaler.step(optimizer)
-                    scaler.update()
-                    optimizer.zero_grad()
-                    scheduler.step()
-                    self.current_steps += 1
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    self.optimizer.zero_grad()
+                    self.scheduler.step()
+                    self.current_step += 1
 
                 # Log metrics
-                losses.append(loss.item() * self.gradient_accumulation_steps)
-                l_epe.append(metrics["epe"])
-                l_percent_0_5.append(metrics["0.5px"])
-                l_percent_1.append(metrics["1px"])
-                l_percent_3.append(metrics["3px"])
-                l_percent_5.append(metrics["5px"])
-
-                if (i_batch + 1) % self.log_interval == 0:
-                    tracker.log(
-                        {
-                            "train/step": self.current_steps,
-                            "train/epoch": epoch,
-                            "train/lr": scheduler.get_last_lr()[0],
-                            "train/loss": np.mean(losses),
-                            "train/epe": np.mean(l_epe),
-                            "train/percent_0_5px": np.mean(l_percent_0_5),
-                            "train/percent_1px": np.mean(l_percent_1),
-                            "train/percent_3px": np.mean(l_percent_3),
-                            "train/percent_5px": np.mean(l_percent_5),
-                        }
-                    )
-                    losses = []
-                    l_epe = []
-                    l_percent_0_5 = []
-                    l_percent_1 = []
-                    l_percent_3 = []
-                    l_percent_5 = []
+                training_metrics["loss"].append(loss.item() * self.gradient_accumulation_steps)
+                for key, value in metrics.items():
+                    if key not in training_metrics:
+                        training_metrics[key] = []
+                    training_metrics[key].append(value)
+                if (self.current_step + 1) % self.log_interval == 0:
+                    log_data = {}
+                    for key, value in training_metrics.items():
+                        log_data[key] = np.mean(value)
+                    log_data["train/lr"] = self.scheduler.get_last_lr()[0]
+                    self.log_training(log_data)
+                    training_metrics = {"loss": []}
 
                 # Validation
-                if (i_batch + 1) % val_interval_steps == 0:
+                if self.reach_eval_interval(len(train_dataloader)):
+                    logger.info("Validation started")
+                    if is_dist_initialized():
+                        dist.barrier()
                     model.eval()
-                    results = self.evaluate(model, criterion, val_dataloader, device)
+                    results = self.evaluate(model, val_dataloader)
 
                     # Infer on 1 example to log for debugging purposes
                     image, disp_gt, disp_pred = self.predict_and_get_visualization(
-                        model, next(iter(val_dataloader)), device
+                        model,
+                        next(iter(val_dataloader)),
                     )
 
-                    tracker.log(
-                        {
-                            "val/loss": results["loss"],
-                            "val/epe": results["epe"],
-                            "val/percent_0_5px": results["percent_0_5px"],
-                            "val/percent_1px": results["percent_1px"],
-                            "val/percent_3px": results["percent_3px"],
-                            "val/percent_5px": results["percent_5px"],
-                            "val/left_image": wandb.Image(image),
-                            "val/GT": wandb.Image(disp_gt),
-                            "val/Prediction": wandb.Image(disp_pred),
-                        }
-                    )
+                    log_data = {}
+                    for key, value in results.items():
+                        log_data[f"val/{key}"] = np.mean(value)
+                    log_data["val/left_image"] = wandb.Image(image)
+                    log_data["val/GT"] = wandb.Image(disp_gt)
+                    log_data["val/Prediction"] = wandb.Image(disp_pred)
+                    self.log_training(log_data)
 
-                    if is_dist_initialized():
-                        model_state_dict = getattr(model.module, '_orig_mod', model.module).state_dict()
-                    else:
-                        model_state_dict = getattr(model, '_orig_mod', model).state_dict()
-
-                    if (is_dist_initialized() and is_main_process()) or not is_dist_initialized():
-                        # Save checkpoint if best
-                        topk_cp_dir, old_topk_cp = self.is_topk_checkpoint(
-                            epoch, self.current_steps, results["loss"], "loss", condition="min"
-                        )
-                        if topk_cp_dir:
-                            logger.info(f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints. Saving...")
-
-                            self.save_checkpoint(
-                                os.path.join(self.artifact_dir, topk_cp_dir),
-                                model_state_dict,
-                                optimizer.state_dict(),
-                                scheduler.state_dict(),
-                            )
-
-                            if old_topk_cp:
-                                shutil.rmtree(os.path.join(self.artifact_dir, old_topk_cp))
-
-                        # Remove old checkpoint & Save latest checkpoint
-                        old_latest_cp_dir = self.get_latest_checkpoint_from_dir(self.artifact_dir)
-                        if old_latest_cp_dir:
-                            shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
-                        latest_cp_dir = self.get_latest_checkpoint_name(self.current_steps)
-
-                        self.save_checkpoint(
-                            os.path.join(self.artifact_dir, latest_cp_dir),
-                            model_state_dict,
-                            optimizer.state_dict(),
-                            scheduler.state_dict(),
-                        )
+                    if is_main_process():
+                        self.save_topk_checkpoint(results)
 
                     # Back to training mode
                     model.train()
+                    if is_dist_initialized():
+                        dist.barrier()
 
-                if self.current_steps >= self.max_steps:
-                    logger.info("Training finished. Save the last checkpoint")
+                if self.current_step >= self.max_steps:
+                    logger.info("Training finished. Saving the last checkpoint")
                     self.save_checkpoint(
-                        os.path.join(self.artifact_dir, self.get_latest_checkpoint_name(self.current_steps)),
-                        model.module.state_dict() if is_dist_initialized() else model.state_dict(),
-                        optimizer.state_dict(),
-                        scheduler.state_dict(),
+                        os.path.join(self.artifact_dir, self.get_latest_checkpoint_name(self.current_step)),
+                        {
+                            "model": get_model_state_dict(self.model),
+                            "optimizer": self.optimizer.state_dict(),
+                            "scheduler": self.scheduler.state_dict(),
+                        },
+                        use_safetensors={"model": False, "optimizer": False, "scheduler": False},
                     )
-                    break
+                    if is_main_process():
+                        pbar.close()
+
+                    logger.info("Training finished")
+                    return
 
     @torch.no_grad()
-    def evaluate(self, model: nn.Module, criterion: Callable, dataloader: DataLoader, device: str) -> dict:
+    def evaluate(self, model: nn.Module, dataloader: DataLoader) -> dict:
         """
         Evaluate CRE Stereo model
 
         Args:
             model (nn.Module): model to evaluate
-            criterion (Callable): criterion function
             dataloader (DataLoader): data loader
 
         Returns:
@@ -303,15 +323,15 @@ class CREStereoTrainer(BaseTrainer):
         percent_5 = []
 
         for i_batch, batch in enumerate(tqdm(dataloader, desc="Evaluating")):
-            if self.num_val_samples != -1 and i_batch >= self.num_val_samples:
+            if self.num_val_samples is not None and i_batch >= self.num_val_samples:
                 break
-            left_frames, left_labels = self.process_input(batch["left"], device)
-            right_frames, _ = self.process_input(batch["right"], device)
+            left_frames, left_labels = self.process_input(batch["left"])
+            right_frames, _ = self.process_input(batch["right"])
 
             with torch.amp.autocast(device_type="cuda", dtype=self.dtype):
                 # Forward
                 m_outputs = model(left_frames, right_frames)
-                loss, metrics = criterion(left_labels, m_outputs)
+                loss, metrics = self.criterion(left_labels, m_outputs)
 
             # Metrics
             losses.append(loss.detach().item())

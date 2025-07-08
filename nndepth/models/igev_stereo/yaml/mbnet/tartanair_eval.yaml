@@ -1,0 +1,25 @@
+dataset_dir: /data/tartanair
+HW: [480, 640]
+train_envs:
+- abandonedfactory
+- amusement
+- carwelding
+- endofworld
+- gascola
+- hospital
+- japanesealley
+- neighborhood
+- ocean
+- office
+- office2
+- oldtown
+- seasidetown
+- seasonsforest
+- seasonsforest_winter
+- soulcity
+- westerndesert
+val_envs:
+- abandonedfactory_night
+
+batch_size: 12
+num_workers: 8

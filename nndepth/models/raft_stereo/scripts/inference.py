@@ -3,23 +3,34 @@ import torch
 import torch.nn.functional as F
 import argparse
 import cv2
+import sys
 import numpy as np
 from tqdm import tqdm
 from loguru import logger
 from typing import Tuple
 
-from nndepth.models.raft_stereo import STEREO_MODELS
 from nndepth.scene import Frame, Disparity
 from nndepth.utils.common import load_weights
 
+from nndepth.models.raft_stereo.configs import BaseRAFTStereoModelConfig, RepViTRAFTStereoModelConfig
+from nndepth.models.raft_stereo.model import BaseRAFTStereo, Coarse2FineGroupRepViTRAFTStereo
 
-def parse_args():
+
+NAME_TO_MODEL_CONFIG = {
+    "base": {
+        "model_config": BaseRAFTStereoModelConfig,
+        "model": BaseRAFTStereo,
+    },
+    "repvit": {
+        "model_config": RepViTRAFTStereoModelConfig,
+        "model": Coarse2FineGroupRepViTRAFTStereo,
+    },
+}
+
+
+def parse_args(model_name: str):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_config", type=str, required=True, help="Path to model config file")
-    parser.add_argument(
-        "--model_name", type=str, required=True, choices=STEREO_MODELS.keys(), help="Name of the model to use"
-    )
-    parser.add_argument("--weights", type=str, required=True, help="Path to model weight")
+    NAME_TO_MODEL_CONFIG[model_name]["model_config"].add_args(parser)
     parser.add_argument("--left_path", type=str, required=True, help="Path to directory of left images")
     parser.add_argument("--right_path", type=str, required=True, help="Path to directory of right images")
     parser.add_argument("--HW", type=int, nargs="+", default=(480, 640), help="Model input size")
@@ -37,7 +48,7 @@ def parse_args():
         help="Which format to save output. image or video are supported. Default: %(default)s",
     )
     parser.add_argument("--viz_hw", type=int, nargs="+", default=(480, 640), help="Resolution of output image/video")
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[2:])
     return args
 
 
@@ -56,10 +67,13 @@ def load_image(image_path: str) -> torch.Tensor:
 
 
 @torch.no_grad()
-def main(args):
+def main(model_name: str, args):
     # Instantiate the model
-    model, model_config = STEREO_MODELS[args.model_name].init_from_config(args.model_config)
-    model = load_weights(model, args.weights, strict_load=True).cuda()
+    model_config_cls = NAME_TO_MODEL_CONFIG[model_name]["model_config"]
+    model_cls = NAME_TO_MODEL_CONFIG[model_name]["model"]
+    model_config = model_config_cls.from_args(args)
+    model = model_cls(**model_config.to_dict())
+    model = load_weights(model, model_config.weights, strict_load=model_config.strict_load).cuda()
     model.eval()
     logger.info("Model is loaded successfully !")
 
@@ -117,5 +131,10 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    model_name = sys.argv[1]
+    assert (
+        model_name in NAME_TO_MODEL_CONFIG
+    ), f"Model {model_name} not found. Available models: {NAME_TO_MODEL_CONFIG.keys()}"
+
+    args = parse_args(model_name)
+    main(model_name, args)

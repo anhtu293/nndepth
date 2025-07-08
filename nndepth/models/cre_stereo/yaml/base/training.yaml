@@ -1,10 +1,14 @@
 model:
+  fnet_cls: basic_encoder
+  update_cls: basic_update_block
   iters: 12
-  fnet_dim: 256
+  max_disp: 192
+  num_fnet_channels: 256
   hidden_dim: 128
-  context_dim: 64
-  corr_levels: 4
-  corr_radius: 4
+  context_dim: 128
+  search_num: 9
+  mixed_precision: false
+  test_mode: false
   tracing: false
   include_preprocessing: false
   weights: null
@@ -38,8 +42,8 @@ data:
   - abandonedfactory_night
 trainer:
   workdir: /home/cv/nndepth/experiments
-  project_name: raft_stereo
-  experiment_name: raft-base
+  project_name: crestereo
+  experiment_name: base_cre_stereo
   num_epochs: 100
   max_steps: 250000
   gradient_accumulation_steps: 1

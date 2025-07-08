@@ -559,7 +559,7 @@ class BaseTrainingConfig(BaseConfiguration):
     gradient_accumulation_steps: Annotated[int, "Number of steps to accumulate gradients"] = 1
     val_interval: Annotated[float, "Validation interval"] = 1.0
     log_interval: Annotated[int, "Logging interval"] = 100
-    num_val_samples: Annotated[int, "Number of validation samples"] = -1
+    num_val_samples: Annotated[Optional[int], "Number of validation samples"] = None
     save_best_k_cp: Annotated[int, "Number of best checkpoints to save"] = 3
     tracker: Annotated[str, "Name of the tracker to use"] = "wandb"
     checkpoint: Annotated[Optional[str], "Path to the checkpoint to resume from"] = None

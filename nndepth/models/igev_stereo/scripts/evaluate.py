@@ -6,10 +6,13 @@ from tqdm import tqdm
 from loguru import logger
 from tabulate import tabulate
 from typing import Dict
-from nndepth.utils.common import load_weights
+import yaml
+
+from nndepth.utils import load_weights
 from nndepth.data.dataloaders.utils import Padder
-from nndepth.models.igev_stereo import STEREO_MODELS
 from nndepth.data.dataloaders import TartanairDisparityDataLoader, Kitti2015DisparityDataLoader
+from nndepth.models.igev_stereo.configs import IGEVStereoMBNetModelConfig
+from nndepth.models.igev_stereo.model import IGEVStereoMBNet
 
 
 DATA_LOADERS = {
@@ -70,15 +73,9 @@ class EvalCriterion:
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_name", type=str, required=True, choices=STEREO_MODELS.keys(), help="Name of the model to evaluate"
-    )
-    parser.add_argument("--model_config", type=str, required=True, help="Path to model config file")
-    parser.add_argument(
-        "--data_name", type=str, required=True, choices=DATA_LOADERS.keys(), help="Name of the dataset to evaluate"
-    )
+    IGEVStereoMBNetModelConfig.add_args(parser)
+    parser.add_argument("--data_name", type=str, required=True, help="Name of the dataset to evaluate")
     parser.add_argument("--data_config", type=str, required=True, help="Path to data config file")
-    parser.add_argument("--weights", type=str, required=True, help="Path to model weight")
     parser.add_argument("--metric_name", nargs="+", default=[], help="Name of metric. Example: kitti-d1")
     parser.add_argument(
         "--metric_threshold",
@@ -97,7 +94,7 @@ def parse_args():
         type=int,
         default=32,
         help="The input resolution of image will be padded so that its height and width are divisible by this number\
-             which is highest downsample of backbone. Default: 32 for RAFTStereo")
+             which is highest downsample of backbone. Default: 32 for IGEVStereoMBNet")
     args = parser.parse_args()
     return args
 
@@ -109,14 +106,17 @@ def main(args):
     )
 
     # Instantiate the model
-    model, _ = STEREO_MODELS[args.model_name].init_from_config(args.model_config)
-    model = load_weights(model, args.weights, strict_load=True).cuda()
+    model_config = IGEVStereoMBNetModelConfig.from_args(args)
+    model = IGEVStereoMBNet(**model_config.to_dict())
+    model = load_weights(model, model_config.weights, strict_load=model_config.strict_load).cuda()
     model.eval()
     logger.info("Model is loaded successfully !")
 
     # init dataloader
-    dataloader, data_config = DATA_LOADERS[args.data_name].init_from_config(args.data_config)
-    dataloader.setup()
+    with open(args.data_config, "r") as f:
+        data_config = yaml.load(f, Loader=yaml.FullLoader)
+    dataloader = DATA_LOADERS[args.data_name](**data_config)
+    dataloader.setup(stage="val")
 
     # init criterion
     metric_info = {}

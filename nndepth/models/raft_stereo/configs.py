@@ -3,8 +3,9 @@ Configuration classes for RAFT Stereo model.
 These classes inherit from BaseConfiguration and use type annotations for automatic CLI generation.
 """
 
-from typing import Annotated, List, Optional, Tuple, Union
-from nndepth.utils import BaseConfiguration, BaseDataloaderConfig, BaseTrainingConfig
+from typing import Annotated, List, Optional, Tuple
+from nndepth.utils import BaseConfiguration, BaseTrainingConfig
+from nndepth.data.dataloaders.configs import TartanairDisparityDataConfig
 
 
 class BaseRAFTStereoModelConfig(BaseConfiguration):
@@ -22,20 +23,6 @@ class BaseRAFTStereoModelConfig(BaseConfiguration):
     strict_load: bool = True
 
 
-class TartanairDataConfig(BaseDataloaderConfig):
-    """Configuration for TartanAir dataset."""
-
-    dataset_dir: Annotated[str, "Path to the TartanAir dataset"] = "/data/tartanair"
-    HW: Annotated[List[int], "Height and width of the images"] = [480, 640]
-    train_envs: List[str] = [
-        "abandonedfactory", "amusement", "carwelding", "endofworld", "gascola",
-        "hospital", "japanesealley", "neighborhood", "ocean", "office", "office2",
-        "oldtown", "seasidetown", "seasonsforest", "seasonsforest_winter",
-        "soulcity", "westerndesert"
-    ]
-    val_envs: List[str] = ["abandonedfactory_night"]
-
-
 class RAFTTrainerConfig(BaseTrainingConfig):
     """Configuration for RAFT Stereo trainer."""
 
@@ -46,7 +33,7 @@ class RAFTTrainerConfig(BaseTrainingConfig):
     device: Annotated[str, "Device for training"] = "cuda"
 
 
-class Coarse2FineGroupRepViTRAFTStereoModelConfig(BaseRAFTStereoModelConfig):
+class RepViTRAFTStereoModelConfig(BaseRAFTStereoModelConfig):
     """Configuration for Coarse2FineGroupRepViTRAFTStereo model parameters."""
 
     num_groups: Annotated[int, "Number of groups"] = 4
@@ -64,13 +51,13 @@ class BaseRAFTTrainingConfig(BaseConfiguration):
     """Configuration for Base RAFT Stereo training."""
 
     model: Annotated[BaseRAFTStereoModelConfig, "Model configuration"] = BaseRAFTStereoModelConfig()
-    data: Annotated[TartanairDataConfig, "Data configuration"] = TartanairDataConfig()
+    data: Annotated[TartanairDisparityDataConfig, "Data configuration"] = TartanairDisparityDataConfig()
     trainer: Annotated[RAFTTrainerConfig, "Trainer configuration"] = RAFTTrainerConfig()
 
 
 class RepViTRAFTStereoTrainingConfig(BaseConfiguration):
     """Configuration for RepViTRAFTStereo training."""
 
-    model: Annotated[Coarse2FineGroupRepViTRAFTStereoModelConfig, "Model configuration"] = Coarse2FineGroupRepViTRAFTStereoModelConfig()
-    data: Annotated[TartanairDataConfig, "Data configuration"] = TartanairDataConfig()
+    model: Annotated[RepViTRAFTStereoModelConfig, "Model configuration"] = RepViTRAFTStereoModelConfig()
+    data: Annotated[TartanairDisparityDataConfig, "Data configuration"] = TartanairDisparityDataConfig()
     trainer: Annotated[RAFTTrainerConfig, "Trainer configuration"] = RAFTTrainerConfig()

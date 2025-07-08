@@ -1,7 +1,8 @@
 model:
-  iters: 12
-  fnet_dim: 256
-  hidden_dim: 128
+  update_cls: basic_update_block
+  cv_groups: 8
+  iters: 6
+  hidden_dim: 64
   context_dim: 64
   corr_levels: 4
   corr_radius: 4
@@ -10,7 +11,7 @@ model:
   weights: null
   strict_load: true
 data:
-  batch_size: 4
+  batch_size: 2
   num_workers: 8
   dataset_dir: /data/tartanair
   HW:
@@ -38,8 +39,8 @@ data:
   - abandonedfactory_night
 trainer:
   workdir: /home/cv/nndepth/experiments
-  project_name: raft_stereo
-  experiment_name: raft-base
+  project_name: igev_stereo
+  experiment_name: mbnet_igev_stereo
   num_epochs: 100
   max_steps: 250000
   gradient_accumulation_steps: 1
@@ -54,4 +55,3 @@ trainer:
   weight_decay: 0.0001
   epsilon: 1.0e-08
   dtype: bfloat16
-  device: cuda

@@ -8,18 +8,16 @@ from tqdm import tqdm
 from loguru import logger
 from typing import Tuple
 
-from nndepth.models.cre_stereo import STEREO_MODELS
 from nndepth.scene import Frame, Disparity
 from nndepth.utils.common import load_weights
+
+from nndepth.models.igev_stereo.configs import IGEVStereoMBNetModelConfig
+from nndepth.models.igev_stereo.model import IGEVStereoMBNet
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_config", type=str, required=True, help="Path to model config file")
-    parser.add_argument(
-        "--model_name", type=str, required=True, choices=STEREO_MODELS.keys(), help="Name of the model to use"
-    )
-    parser.add_argument("--weights", type=str, required=True, help="Path to model weight")
+    IGEVStereoMBNetModelConfig.add_args(parser)
     parser.add_argument("--left_path", type=str, required=True, help="Path to directory of left images")
     parser.add_argument("--right_path", type=str, required=True, help="Path to directory of right images")
     parser.add_argument("--HW", type=int, nargs="+", default=(480, 640), help="Model input size")
@@ -58,8 +56,9 @@ def load_image(image_path: str) -> torch.Tensor:
 @torch.no_grad()
 def main(args):
     # Instantiate the model
-    model, model_config = STEREO_MODELS[args.model_name].init_from_config(args.model_config)
-    model = load_weights(model, args.weights, strict_load=True).cuda()
+    model_config = IGEVStereoMBNetModelConfig.from_args(args)
+    model = IGEVStereoMBNet(**model_config.to_dict())
+    model = load_weights(model, model_config.weights, strict_load=model_config.strict_load).cuda()
     model.eval()
     logger.info("Model is loaded successfully !")
 
