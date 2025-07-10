@@ -15,6 +15,7 @@ This module is used to implement - train - inference different neural networks f
 | **CREStereoBase** | WIP | WIP | WIP | [README](./cre_stereo/README.md) |
 | **IGEVStereoBase** | WIP | WIP | WIP | [README](./igev_stereo/README.md) |
 | **IGEVStereoMBNet** | WIP | WIP | WIP | [README](./igev_stereo/README.md) |
+| **MiDas** | WIP | WIP | WIP | [README](./midas/README.md) |
 
 ## General Structure of each model
 ```
@@ -34,3 +35,4 @@ For detailed information about training, inference, and evaluation for each mode
 - **RAFT-Stereo**: [models/raft_stereo/README.md](./raft_stereo/README.md)
 - **CRE-Stereo**: [models/cre_stereo/README.md](./cre_stereo/README.md)
 - **IGEV-Stereo**: [models/igev_stereo/README.md](./igev_stereo/README.md)
+- **MiDas**: [models/midas/README.md](./midas/README.md)

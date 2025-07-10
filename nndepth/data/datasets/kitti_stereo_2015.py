@@ -123,31 +123,20 @@ class KittiStereo2015:
     ):
         """
         Stereo Tasks from Kitti 2015 dataset.
-        Parameters
-        ----------
-        name : str
-            Name of the dataset
-        sequence_start : int
-            20 images are available for each item. Only image 10 and 11 are annotated.
-            sequence_start is the first image to load.
-        sequence_end : int
-            sequence_end is the last image to load.
-        grayscale : bool
-            If True, load images in grayscale.
-        labels : List[str]
-            List of data to load. Available data are:
-            - right: right image
-            - disp_noc: disparity map without occlusions
-            - disp_occ: disparity map with occlusions
-        split : Split
-            Split of the dataset. Can be `Split.TRAIN` or `Split.TEST`.
 
-        Examples
-        --------
-        >>> # Visualize a sample
+        Args:
+            dataset_dir (str): Path to the dataset directory.
+            subset (str): Split of the dataset. Can be `train` or `val`.
+            sequence_start (int): 20 images are available for each item. Only image 10 and 11 are annotated.
+            sequence_start is the first image to load.
+            sequence_end (int): sequence_end is the last image to load.
+            cameras (list): List of cameras to load. Can be `left` or `right`.
+            labels (list): List of data to load. Available data are: `disp_noc`, `disp_occ`.
+
+        Examples:
         >>> from random import randint
         >>> import cv2
-        >>> dataset = KittiStereo2015(sequence_start=10, sequence_end=10)
+        >>> dataset = KittiStereo2015(subset="train", sequence_start=10, sequence_end=10)
         >>> obj = dataset[randint(0, len(dataset))]
         >>> frame = obj["left"][0]
         >>> disps = torch.stack([frame.disparity, frame.disparity], dim=0)
@@ -218,16 +207,12 @@ class KittiStereo2015:
         """
         Load a sequence of frames from the dataset.
 
-        Parameters
-        ----------
-        idx : int
-            Index of the sequence.
+        Args:
+            idx (int): Index of the sequence.
 
-        Returns
-        -------
-        Dict[str, List[Frame]]
-            Dictionary of index beetween sequance_start and sequance_end.\n
-            Each index is a list of frames.
+        Returns:
+            Dict[str, List[Frame]]: Dictionary of index beetween sequance_start and sequance_end.
+                Each index is a list of frames.
         """
         sequence: Dict[int, Dict[str, Frame]] = {}
         calib = self._load_calib(self.split_folder, idx)

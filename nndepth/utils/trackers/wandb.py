@@ -19,7 +19,7 @@ class WandbTracker(object):
         """
         WandbLogger class to log data to Weights and Biases platform
 
-        Parameters
+        Args:
             project_name (str): Name of the project
             run_name (str): Name of the run
             root_log_dir (str, optional): Root directory to save logs. Defaults to None.
@@ -77,7 +77,7 @@ class WandbTracker(object):
         """
         Log data to wandb
 
-        Parameters
+        Args:
             data (dict): Data to log
             step (int): Step
         """

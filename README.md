@@ -33,6 +33,11 @@ The easiest way to set up the working environment is by using Docker. Follow the
    cd docker && docker build -t nndepth -f Dockerfile.gpu .
    ```
 
+   You can build the image with the version of pytorch and cuda you want.
+   ```bash
+   docker build -t nndepth --build-arg BASE_IMAGE=pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel --build-arg PYTHON_VERSION=3.10 --build-arg PYTORCH_VERSION=2.6.0 --build-arg TORCHVISION_VERSION=0.17.1 --build-arg TORCHAUDIO_VERSION=2.6.0 .
+   ```
+
 2. Launch the Docker container:
    ```bash
    docker run --gpus all --ipc host -e LOCAL_USER_ID=$(id -u) -it --rm \

@@ -4,17 +4,12 @@ import torch
 def linear_sampler(corr, coords_lvl):
     """Sample from correlation volume with linear interpolation
 
-    Parameters
-    ----------
-    corr :
-        corr volume, shape (b*h1*w1, w2)
-    coords_lvl :
-        coord of points to sample, (b*h1*w1, 2*r+1)
+    Args:
+        corr (torch.Tensor): corr volume, shape (b*h1*w1, w2)
+        coords_lvl (torch.Tensor): coord of points to sample, (b*h1*w1, 2*r+1)
 
-    Returns
-    -------
-    sampled :
-        sampled values, (b*h1*w1, 2*r+1)
+    Returns:
+        sampled (torch.Tensor): sampled values, (b*h1*w1, 2*r+1)
     """
     _, w2 = corr.shape
     # trick to make clip operation compatible with tensorRT

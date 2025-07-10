@@ -1,5 +1,4 @@
-from .tartanair_disparity import TartanairDisparityDataLoader
-from .kitti2015_disparity import Kitti2015DisparityDataLoader
+from .disparity import TartanairDisparityDataLoader, Kitti2015DisparityDataLoader
 from .configs import TartanairDisparityDataConfig, Kitti2015DisparityDataConfig
 
 __all__ = [

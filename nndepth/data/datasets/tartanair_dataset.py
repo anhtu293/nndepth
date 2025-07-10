@@ -44,8 +44,7 @@ class TartanairDataset:
         """
         Dataset for Tartanair dataset
 
-        Parameters
-        ----------
+        Args:
             dataset_dir (str): path to the dataset
             envs (List[str]): list of environments
             sequences (Dict[str, List[str])]: list of sequences per evironment
@@ -57,12 +56,7 @@ class TartanairDataset:
             pose_format (str): pose format
             get_cameras_fn (Callable): function to get cameras
 
-        Returns
-        -------
-            None
-
-        Examples
-        --------
+        Examples:
         >>> import cv2
         >>> dataset = TartanairDataset(
                 dataset_dir="/data/tartanair",
@@ -229,7 +223,8 @@ class TartanairDataset:
                 f"{frame_id:06d}_{side}_depth.npy",
             )
             depth = torch.Tensor(np.expand_dims(np.load(depth_path), axis=0))
-            depth = Depth(data=depth)
+            valid_mask = depth > 0
+            depth = Depth(data=depth, valid_mask=valid_mask)
             frame.depth = depth
 
         # load disparity from depth
