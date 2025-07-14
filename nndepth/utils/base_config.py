@@ -513,10 +513,7 @@ class BaseConfiguration:
         """String representation of configuration."""
         items = []
         for key, value in self.to_dict().items():
-            if isinstance(value, dict):
-                items.append(f"{key}=<nested>")
-            else:
-                items.append(f"{key}={value}")
+            items.append(f"{key}={value}")
         return f"{self.__class__.__name__}({', '.join(items)})"
 
     def print_summary(self, title: Optional[str] = None, indent: int = 0):

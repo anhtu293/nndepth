@@ -5,12 +5,12 @@ import torch
 from loguru import logger
 from typing import List, Dict, Optional
 
+from .base_dataset import BaseDataset
 from nndepth.scene import Frame, Depth
 
 
-class DIMLDataset:
+class DIMLDataset(BaseDataset):
     SCENES = ["indoor", "outdoor"]
-    LOADING_RETRY_LIMIT = 10
     VAL_SUBSETS = ["16. Billiard Hall", "170721_C0"]
 
     def __init__(
@@ -19,6 +19,7 @@ class DIMLDataset:
         subset: Optional[str] = None,
         scenes: Optional[List[str]] = None,
         outdoor_conf_threshold: float = 0.6,
+        **kwargs,
     ):
         """
         Args:
@@ -26,14 +27,17 @@ class DIMLDataset:
             subset: The subset to load (`train`, `val`). If None, all subsets will be loaded. Default: None.
             scenes: The scenes to load (`indoor`, `outdoor`). If None, all scenes will be loaded. Default: None.
             outdoor_conf_threshold: The confidence threshold for the outdoor subset. Default: 0.6.
+            **kwargs: Additional arguments.
         """
+        super().__init__(**kwargs)
+
         self.scenes = [scene for scene in self.SCENES if scenes is None or scene in scenes]
         assert len(self.scenes) > 0, "No scenes to load"
 
         assert subset is None or subset in ["train", "val"], "Invalid subset"
         self.subset = subset
         self.dataset_dir = dataset_dir
-        self.items = self.get_items()
+        self.items = self.init_items()
         self.outdoor_conf_threshold = outdoor_conf_threshold
 
         logger.info(f"Loaded {len(self.items)} items from {self.dataset_dir}")
@@ -41,7 +45,7 @@ class DIMLDataset:
     def __len__(self):
         return len(self.items)
 
-    def get_items(self) -> List[Dict[str, str]]:
+    def init_items(self) -> List[Dict[str, str]]:
         items = []
         for scene in self.scenes:
             logger.info(f"Loading {scene} subset")
@@ -178,20 +182,10 @@ class DIMLDataset:
 
         return frame
 
-    def __getitem__(self, idx: int):
-        nb_retry = 0
-        while nb_retry < self.LOADING_RETRY_LIMIT:
-            try:
-                item = self.items[idx]
-                scene = item["scene"]
-                if scene == "indoor":
-                    return self.load_indoor_item(item)
-                elif scene == "outdoor":
-                    return self.load_outdoor_item(item)
-            except Exception as e:
-                nb_retry += 1
-                idx = (idx + 1) % len(self.items)
-                logger.info(f"Error while loading item {idx}: {e}. Retry with item {idx}")
-
-        logger.error(Exception("Error while loading data. Retry limit reached"))
-        return None
+    def get_item(self, idx: int) -> Optional[Frame]:
+        item = self.items[idx]
+        scene = item["scene"]
+        if scene == "indoor":
+            return self.load_indoor_item(item)
+        elif scene == "outdoor":
+            return self.load_outdoor_item(item)

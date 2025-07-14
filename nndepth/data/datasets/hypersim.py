@@ -3,18 +3,19 @@ import cv2
 import os
 import numpy as np
 import torch
-from typing import Dict, List
+from typing import Dict, List, Optional
 from tqdm import tqdm
 from loguru import logger
 
 from nndepth.scene import Frame, Depth
+from .base_dataset import BaseDataset
 
 
-class HypersimDataset:
+class HypersimDataset(BaseDataset):
     LABELS = ["depth"]
     FOCAL_LENGTH = 886.81
 
-    def __init__(self, dataset_dir: str, sequences: List[str] = None, labels: List[str] = ["depth"]):
+    def __init__(self, dataset_dir: str, sequences: List[str] = None, labels: List[str] = ["depth"], **kwargs):
         """
         Hypersim dataset.
 
@@ -23,13 +24,15 @@ class HypersimDataset:
             sequences: List of sequences to load. If None, all sequences will be loaded. Default is None.
             labels: List of labels to load. Default is ["depth"].
         """
+        super().__init__(**kwargs)
+
         self.labels = [label for label in self.LABELS if label in labels]
         assert len(self.labels) > 0, "No labels provided"
 
         self.sequences = sequences
         self.dataset_dir = dataset_dir
 
-        self.items = self.load_items()
+        self.items = self.init_items()
 
     def __len__(self) -> int:
         return len(self.items)
@@ -42,7 +45,7 @@ class HypersimDataset:
         cameras = list(set(cameras))
         return cameras
 
-    def load_items(self) -> List[Dict[str, str]]:
+    def init_items(self) -> List[Dict[str, str]]:
         logger.info(f"Loading items from {self.dataset_dir}")
         sequences = os.listdir(self.dataset_dir)
         if self.sequences is not None:
@@ -89,7 +92,7 @@ class HypersimDataset:
         depth = distance / norm * self.FOCAL_LENGTH
         return depth
 
-    def __getitem__(self, idx: int) -> Frame:
+    def get_item(self, idx: int) -> Optional[Frame]:
         item = self.items[idx]
         image = cv2.imread(item["image"])
         image = torch.from_numpy(image).permute(2, 0, 1)

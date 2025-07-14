@@ -9,6 +9,17 @@ class BaseDepthModel(nn.Module):
         self.decoder: nn.Module = self.build_decoder()
         self.last_conv: nn.Module = self.build_last_conv()
 
+    def load_weights(self, weights: str, strict_load: bool = True):
+        if weights.endswith(".safetensors"):
+            from safetensors.torch import load_file
+            state_dict = load_file(weights)
+        elif weights.endswith(".pth"):
+            state_dict = torch.load(weights)
+        else:
+            raise ValueError(f"Unsupported weight format: {weights}")
+
+        self.load_state_dict(state_dict, strict=strict_load)
+
     def build_encoder(self) -> nn.Module:
         raise NotImplementedError
 

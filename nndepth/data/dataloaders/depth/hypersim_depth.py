@@ -1,3 +1,4 @@
+import os
 import torch
 from torch.utils.data import RandomSampler, DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -16,7 +17,7 @@ class HypersimDepthDataLoader(BaseDataLoader):
         self,
         dataset_dir: str = "/data/hypersim",
         HW: Tuple[int, int] = [384, 496],
-        sequences: Optional[List[str]] = None,
+        val_sequences: Optional[List[str]] = None,
         no_augmentation: bool = False,
         **kwargs,
     ):
@@ -35,7 +36,7 @@ class HypersimDepthDataLoader(BaseDataLoader):
         super().__init__(**kwargs)
         self.dataset_dir = dataset_dir
         self.HW = HW
-        self.sequences = sequences
+        self.val_sequences = val_sequences
         self.no_augmentation = no_augmentation
 
         if not self.no_augmentation:
@@ -49,8 +50,6 @@ class HypersimDepthDataLoader(BaseDataLoader):
             frame = self.train_augmentation(frame)
         else:
             frame = frame.resize(self.HW)
-
-        # Normalize image data to [-1, 1]
         frame.data = (frame.data - 127.5) / 127.5
         frame.depth = frame.depth.inverse(clip_max=None, clip_min=None)
 
@@ -58,8 +57,6 @@ class HypersimDepthDataLoader(BaseDataLoader):
 
     def val_transform(self, frame: Frame) -> Frame:
         frame = frame.resize(self.HW)
-
-        # Normalize image data to [-1, 1]
         frame.data = (frame.data - 127.5) / 127.5
         frame.depth = frame.depth.inverse(clip_max=None, clip_min=None)
 
@@ -82,9 +79,14 @@ class HypersimDepthDataLoader(BaseDataLoader):
         return collate
 
     def setup_train_dataloader(self) -> DataLoader:
+        ds_dir = os.path.join(self.dataset_dir, "train")
+        sequences = sorted(os.listdir(ds_dir))
+        sequences = [seq for seq in sequences if os.path.isdir(os.path.join(ds_dir, seq))]
+        sequences = [seq for seq in sequences if seq not in self.val_sequences]
+
         self.train_dataset = HypersimDataset(
             dataset_dir=self.dataset_dir,
-            sequences=self.sequences,
+            sequences=sequences,
             labels=["depth"],
         )
         sampler = (
@@ -103,7 +105,7 @@ class HypersimDepthDataLoader(BaseDataLoader):
     def setup_val_dataloader(self):
         self.val_dataset = HypersimDataset(
             dataset_dir=self.dataset_dir,
-            sequences=self.sequences,
+            sequences=self.val_sequences,
             labels=["depth"],
         )
         sampler = (

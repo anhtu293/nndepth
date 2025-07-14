@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Optional
 
 from nndepth.decoders import BaseDecoder
 from nndepth.encoders import MobilenetV3LargeEncoder
@@ -8,9 +9,14 @@ from .base import BaseDepthModel
 
 
 class MobileNetV3DepthModel(BaseDepthModel):
-    def __init__(self, feature_channels: int = 64):
+    def __init__(self, feature_channels: int = 64, weights: Optional[str] = None, strict_load: bool = True, **kwargs):
         self.feature_channels = feature_channels
-        super().__init__()
+        self.weights = weights
+        self.strict_load = strict_load
+        super().__init__(**kwargs)
+
+        if self.weights is not None:
+            self.load_weights(self.weights, self.strict_load)
 
     def build_encoder(self) -> nn.Module:
         return MobilenetV3LargeEncoder(

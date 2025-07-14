@@ -7,6 +7,7 @@ from safetensors.torch import load_file, save_file
 from abc import ABC, abstractmethod
 from typing import Union, Optional, Tuple, OrderedDict
 from loguru import logger
+import numpy as np
 
 from nndepth.utils.distributed_training import run_on_main_process
 from nndepth.utils.trackers import WandbTracker
@@ -635,12 +636,28 @@ class BaseTrainer(ABC):
         logger.info("Training is resumed from checkpoint !")
 
     @run_on_main_process
-    def log_training(self, metrics: dict):
+    def log_metrics(self, metrics: dict):
         """
-        Log training metrics to tracker
+        Log metrics to tracker
+
+        Args:
+            metrics (dict): metrics to log
         """
         if self.tracker is not None:
-            self.tracker.log(metrics, step=self.current_step)
+            for key, value in metrics.items():
+                self.tracker.log_scalar(key, value, self.current_step)
+
+    @run_on_main_process
+    def log_visualization(self, data: dict[str, np.ndarray]):
+        """
+        Log visualization to tracker
+
+        Args:
+            data (dict[str, np.ndarray]): data to log
+        """
+        if self.tracker is not None:
+            for key, value in data.items():
+                self.tracker.log_image(key, value, self.current_step)
 
     def reach_eval_interval(self, dataloader_length: int) -> bool:
         """

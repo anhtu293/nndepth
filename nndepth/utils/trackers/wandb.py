@@ -1,6 +1,7 @@
 import os
 import wandb
 import json
+import numpy as np
 from typing import Optional
 
 
@@ -73,13 +74,35 @@ class WandbTracker(object):
         wandb.define_metric("train/*", step_metric="train/step")
         wandb.define_metric("val/*", step_metric="train/step")
 
-    def log(self, data: dict, step: int):
+    def log_scalar(self, key: str, value: float, step: int):
         """
         Log data to wandb
 
         Args:
+            key (str): Key to log
+            value (float): Value to log
+            step (int): Step
+        """
+        self.run.log({key: value, "train/step": step})
+
+    def log_image(self, key: str, image: np.ndarray, step: int):
+        """
+        Log image to wandb
+
+        Args:
+            key (str): Key to log
+            image (np.ndarray): Image to log
+            step (int): Step
+        """
+        self.run.log({key: wandb.Image(image), "train/step": step})
+
+    def log_table(self, key: str, data: dict, step: int):
+        """
+        Log table to wandb
+
+        Args:
+            key (str): Key to log
             data (dict): Data to log
             step (int): Step
         """
-        data["train/step"] = step
-        self.run.log(data)
+        self.run.log({key: wandb.Table(data=data), "train/step": step})

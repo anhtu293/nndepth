@@ -119,24 +119,18 @@ class Depth:
             for _ in range(missing_dim):
                 self.valid_mask = self.valid_mask[None]
 
-        valid_mask = None
         if method == "interpolate":
             data = interpolate(self.data, size, mode="bilinear", **resize_kwargs)
-            if self.valid_mask is not None:
-                valid_mask = interpolate(
-                    self.valid_mask.float(),
-                    size,
-                    mode="bilinear",
-                    **resize_kwargs).type(self.valid_mask.dtype)
         elif method in ["maxpool", "minpool"]:
             if method == "maxpool":
-                data, indices = maxpool_depth(self.data, size, **resize_kwargs)
+                data, _ = maxpool_depth(self.data, size, **resize_kwargs)
             elif method == "minpool":
-                data, indices = minpool_depth(self.data, size, **resize_kwargs)
-            if self.valid_mask is not None:
-                valid_mask = self.valid_mask.flatten()
-                valid_mask = valid_mask[indices.flatten()]
-                valid_mask = valid_mask.reshape(data.shape)
+                data, _ = minpool_depth(self.data, size, **resize_kwargs)
+
+        valid_mask = None
+        if self.valid_mask is not None:
+            valid_mask = (torch.isnan(data) == 0) & (torch.isfinite(data) == 1)
+            valid_mask = valid_mask.type(self.valid_mask.dtype)
 
         for _ in range(missing_dim):
             data = data[0]

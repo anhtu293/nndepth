@@ -5,6 +5,7 @@ import numpy as np
 from typing import Dict, Union
 
 from nndepth.scene import Frame, Disparity, Camera
+from .base_dataset import BaseDataset
 
 
 # https://github.com/utiasSTARS/pykitti/tree/master
@@ -107,7 +108,7 @@ def load_calib_cam_to_cam(cam_to_cam_filepath, velo_to_cam_file: Union[str, None
     return data
 
 
-class KittiStereo2015:
+class KittiStereo2015(BaseDataset):
     SPLIT_FOLDERS = {"train": "training", "val": "testing"}
     LABELS = ["right", "disp_noc", "disp_occ"]
     CAMERAS = ["left", "right"]
@@ -120,6 +121,7 @@ class KittiStereo2015:
         sequence_end=11,
         cameras: list = ["left", "right"],
         labels: list = ["disp_occ"],
+        **kwargs,
     ):
         """
         Stereo Tasks from Kitti 2015 dataset.
@@ -143,7 +145,8 @@ class KittiStereo2015:
         >>> disp_viz = disps.get_view()
         >>> cv2.imshow("disp", disp_viz[0])
         """
-        super().__init__()
+        super().__init__(**kwargs)
+
         assert subset in ["train", "val"], "subset must be in [`train`, `val`]"
         assert not ("disp_noc" in labels and "disp_occ" in labels), (
             "only 1 disparity (`disp_occ` or `disp_noc`) can be passed to labels"
@@ -203,7 +206,7 @@ class KittiStereo2015:
             extrinsic = np.append(rotation, translation, axis=1)
             return torch.Tensor(np.append(extrinsic, np.array([[0, 0, 0, 1]]), axis=0))
 
-    def __getitem__(self, idx) -> Dict[str, Frame]:
+    def get_item(self, idx) -> Dict[str, Frame]:
         """
         Load a sequence of frames from the dataset.
 

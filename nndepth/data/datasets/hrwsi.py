@@ -3,35 +3,37 @@ import numpy as np
 import cv2
 import torch
 from loguru import logger
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from nndepth.scene import Frame, Depth
+from .base_dataset import BaseDataset
 
 
-class HRWSIDataset:
+class HRWSIDataset(BaseDataset):
     SUBSETS = ["train", "val"]
-    LOADING_RETRY_LIMIT = 10
 
-    def __init__(self, dataset_dir: str, subsets: List[str] = None):
+    def __init__(self, dataset_dir: str, subset: str = None, **kwargs):
         """
         Args:
             dataset_dir: The directory of the dataset.
             splits: The splits to load (`train`, `val`). If None, all splits will be loaded. Default: None.
         """
-        self.subsets = [subset for subset in self.SUBSETS if subsets is None or subset in subsets]
-        assert len(self.subsets) > 0, "No subsets to load"
+        super().__init__(**kwargs)
+
+        self.subset = [subset for subset in self.SUBSETS if subset is None or subset in subset]
+        assert len(self.subset) > 0, "No subsets to load"
 
         self.dataset_dir = dataset_dir
-        self.items = self.get_items()
+        self.items = self.init_items()
 
         logger.info(f"Loaded {len(self.items)} items from {self.dataset_dir}")
 
     def __len__(self):
         return len(self.items)
 
-    def get_items(self) -> List[Dict[str, str]]:
+    def init_items(self) -> List[Dict[str, str]]:
         items = []
-        for subset in self.subsets:
+        for subset in self.subset:
             logger.info(f"Loading {subset} subset")
             items.extend(self.load_subset_data(subset))
             logger.info(f"Loaded {len(items)} items from {subset} subset")
@@ -123,16 +125,6 @@ class HRWSIDataset:
 
         return frame
 
-    def __getitem__(self, idx: int):
-        nb_retry = 0
-        while nb_retry < self.LOADING_RETRY_LIMIT:
-            try:
-                item = self.items[idx]
-                return self.load_item(item)
-            except Exception as e:
-                nb_retry += 1
-                idx = (idx + 1) % len(self.items)
-                logger.warning(f"Error while loading item {idx}: {e}. Retry with item {idx}")
-
-        logger.error("Error while loading data. Retry limit reached")
-        return None
+    def get_item(self, idx: int) -> Optional[Frame]:
+        item = self.items[idx]
+        return self.load_item(item)

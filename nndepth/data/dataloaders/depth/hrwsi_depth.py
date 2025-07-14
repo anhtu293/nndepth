@@ -36,8 +36,6 @@ class HRWSIDepthDataLoader(BaseDataLoader):
         else:
             frame = frame.resize(self.HW)
         frame.data = (frame.data - 127.5) / 127.5
-
-        # Normalize inverse depth
         frame.depth = frame.depth.inverse(clip_max=None, clip_min=None)
         min_depth = frame.depth.data[frame.depth.valid_mask].min()
         max_depth = frame.depth.data[frame.depth.valid_mask].max()

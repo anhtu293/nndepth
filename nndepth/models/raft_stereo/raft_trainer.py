@@ -9,7 +9,6 @@ import numpy as np
 from torch.utils.data import DataLoader
 from loguru import logger
 from tqdm import tqdm
-import wandb
 from typing import Tuple, Dict, List
 
 from nndepth.scene import Frame, Disparity
@@ -80,8 +79,8 @@ class RAFTTrainer(BaseTrainer):
         if self.resume:
             self.resume_from_checkpoint(
                 {"model": self.model},
-                {"optimizer": self.optimizer, "scheduler": self.scheduler},
-                use_safetensors={"model": False, "optimizer": False, "scheduler": False},
+                {"optimizer": self.optimizer, "scheduler": self.scheduler, "scaler": self.scaler},
+                use_safetensors={"model": False, "optimizer": False, "scheduler": False, "scaler": False},
                 load_args={"model": {"strict": True}},
                 device=self.device,
             )
@@ -159,11 +158,16 @@ class RAFTTrainer(BaseTrainer):
                 f"loss: {results['loss']} in top {self.save_best_k_cp} checkpoints."
                 + f" Saving at {os.path.join(self.artifact_dir, topk_cp_dir)}."
             )
-
+            state_dicts = {
+                "model": model_state_dict,
+                "optimizer": optimizer_state_dict,
+                "scheduler": scheduler_state_dict,
+                "scaler": self.scaler.state_dict(),
+            }
             self.save_checkpoint(
                 os.path.join(self.artifact_dir, topk_cp_dir),
-                {"model": model_state_dict, "optimizer": optimizer_state_dict, "scheduler": scheduler_state_dict},
-                use_safetensors={"model": False, "optimizer": False, "scheduler": False},
+                state_dicts,
+                use_safetensors={"model": False, "optimizer": False, "scheduler": False, "scaler": False},
             )
 
             if old_topk_cp:
@@ -177,10 +181,16 @@ class RAFTTrainer(BaseTrainer):
             shutil.rmtree(os.path.join(self.artifact_dir, old_latest_cp_dir))
         latest_cp_dir = self.get_latest_checkpoint_name(self.current_step)
 
+        state_dicts = {
+            "model": model_state_dict,
+            "optimizer": optimizer_state_dict,
+            "scheduler": scheduler_state_dict,
+            "scaler": self.scaler.state_dict(),
+        }
         self.save_checkpoint(
             os.path.join(self.artifact_dir, latest_cp_dir),
-            {"model": model_state_dict, "optimizer": optimizer_state_dict, "scheduler": scheduler_state_dict},
-            use_safetensors={"model": False, "optimizer": False, "scheduler": False},
+            state_dicts,
+            use_safetensors={"model": False, "optimizer": False, "scheduler": False, "scaler": False},
         )
         logger.info(f"Saved latest checkpoint {latest_cp_dir}.")
 
@@ -230,12 +240,17 @@ class RAFTTrainer(BaseTrainer):
                 right_frames, _ = self.process_input(batch["right"])
 
                 with torch.amp.autocast(device_type="cuda", dtype=self.dtype):
-                    outputs = model(left_frames, right_frames)
-                    loss, metrics = self.criterion(left_labels, outputs)
-                    loss = loss / self.gradient_accumulation_steps
+                    if (i_batch % self.gradient_accumulation_steps) != 0 and is_dist_initialized():
+                        with model.no_sync():
+                            outputs = model(left_frames, right_frames)
+                            loss, metrics = self.criterion(left_labels, outputs)
+                            loss = loss / self.gradient_accumulation_steps
+                    else:
+                        outputs = model(left_frames, right_frames)
+                        loss, metrics = self.criterion(left_labels, outputs)
+                        loss = loss / self.gradient_accumulation_steps
 
                 self.scaler.scale(loss).backward()
-
                 if (i_batch + 1) % self.gradient_accumulation_steps == 0:
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
@@ -254,7 +269,7 @@ class RAFTTrainer(BaseTrainer):
                     for key, value in training_metrics.items():
                         log_data[key] = np.mean(value)
                     log_data["train/lr"] = self.scheduler.get_last_lr()[0]
-                    self.log_training(log_data)
+                    self.log_metrics(log_data)
                     training_metrics = {"loss": []}
 
                 # Validation
@@ -274,10 +289,13 @@ class RAFTTrainer(BaseTrainer):
                     log_data = {}
                     for key, value in results.items():
                         log_data[f"val/{key}"] = np.mean(value)
-                    log_data["val/left_image"] = wandb.Image(image)
-                    log_data["val/GT"] = wandb.Image(disp_gt)
-                    log_data["val/Prediction"] = wandb.Image(disp_pred)
-                    self.log_training(log_data)
+                    self.log_metrics(log_data)
+                    viz_data = {
+                        "val/left_image": image,
+                        "val/GT": disp_gt,
+                        "val/Prediction": disp_pred,
+                    }
+                    self.log_visualization(viz_data)
 
                     if is_main_process():
                         self.save_topk_checkpoint(results)
@@ -295,8 +313,9 @@ class RAFTTrainer(BaseTrainer):
                             "model": get_model_state_dict(self.model),
                             "optimizer": self.optimizer.state_dict(),
                             "scheduler": self.scheduler.state_dict(),
+                            "scaler": self.scaler.state_dict(),
                         },
-                        use_safetensors={"model": False, "optimizer": False, "scheduler": False},
+                        use_safetensors={"model": False, "optimizer": False, "scheduler": False, "scaler": False},
                     )
                     if is_main_process():
                         pbar.close()

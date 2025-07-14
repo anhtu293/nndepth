@@ -40,7 +40,7 @@ The easiest way to set up the working environment is by using Docker. Follow the
 
 2. Launch the Docker container:
    ```bash
-   docker run --gpus all --ipc host -e LOCAL_USER_ID=$(id -u) -it --rm \
+   xhost +si:localuser:root && docker run --gpus all --ipc host -e LOCAL_USER_ID=$(id -u) -it --rm \
      -v /PATH/TO/YOUR/DATASET:/data \
      -v /PATH/TO/NNDEPTH:/home/cv/nndepth \
      -v /home/YOUR_HOME/.config/:/home/cv/.config \
