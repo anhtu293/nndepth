@@ -56,7 +56,7 @@ class MiDasTrainer(BaseTrainer):
     def build_optimizer(self) -> optim.Optimizer:
         params = [{
             "params": [p for n, p in self.model.named_parameters() if "encoder" in n],
-            "lr": 1e-4,
+            "lr": 1e-5,
         }, {
             "params": [p for n, p in self.model.named_parameters() if "encoder" not in n],
             "lr": self.lr,
@@ -274,6 +274,8 @@ class MiDasTrainer(BaseTrainer):
                 if (self.current_step % self.log_interval) == 0:
                     for key, value in training_metrics.items():
                         training_metrics[key] = np.mean(value)
+                    training_metrics["train/lr1"] = self.optimizer.param_groups[0]["lr"]
+                    training_metrics["train/lr2"] = self.optimizer.param_groups[1]["lr"]
                     self.log_metrics(training_metrics)
                     training_metrics = {}
 
