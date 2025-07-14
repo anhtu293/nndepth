@@ -251,7 +251,7 @@ class MiDasTrainer(BaseTrainer):
                         desc.format(
                             current_epoch=self.current_epoch,
                             total_epochs=self.num_epochs,
-                            current_step=self.current_step,
+                            current_step=i_batch,
                             total_steps=len(train_loader),
                             loss=loss.detach().cpu().item() * self.gradient_accumulation_steps,
                         )

@@ -95,6 +95,7 @@ class HypersimDataset(BaseDataset):
     def get_item(self, idx: int) -> Optional[Frame]:
         item = self.items[idx]
         image = cv2.imread(item["image"])
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = torch.from_numpy(image).permute(2, 0, 1)
 
         distance = h5py.File(item["depth"], "r")["dataset"]
