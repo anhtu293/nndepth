@@ -99,6 +99,7 @@ class HypersimDepthDataLoader(BaseDataLoader):
             sampler=sampler,
             drop_last=True,
             collate_fn=self.collate_fn(subset="train"),
+            pin_memory=True,
         )
         return dataloader
 
@@ -117,5 +118,6 @@ class HypersimDepthDataLoader(BaseDataLoader):
             num_workers=self.num_workers,
             sampler=sampler,
             collate_fn=self.collate_fn(subset="val"),
+            pin_memory=True,
         )
         return dataloader

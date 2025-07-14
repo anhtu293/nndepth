@@ -93,6 +93,7 @@ class TartanairDepthDataLoader(BaseDataLoader):
             sampler=sampler,
             drop_last=True,
             collate_fn=self.collate_fn(subset="train"),
+            pin_memory=True,
         )
         return dataloader
 
@@ -112,5 +113,6 @@ class TartanairDepthDataLoader(BaseDataLoader):
             num_workers=self.num_workers,
             sampler=sampler,
             collate_fn=self.collate_fn(subset="val"),
+            pin_memory=True,
         )
         return dataloader

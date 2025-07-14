@@ -70,6 +70,7 @@ class Kitti2015DisparityDataLoader(BaseDataLoader):
             sampler=RandomSampler(self.train_dataset),
             drop_last=True,
             collate_fn=self.collate_fn(subset="train"),
+            pin_memory=True,
         )
         return dataloader
 
@@ -88,5 +89,6 @@ class Kitti2015DisparityDataLoader(BaseDataLoader):
             num_workers=self.num_workers,
             sampler=RandomSampler(self.val_dataset),
             collate_fn=self.collate_fn(subset="val"),
+            pin_memory=True,
         )
         return dataloader

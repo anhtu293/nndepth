@@ -192,6 +192,7 @@ class MultiDatasetsDepthDataLoader(BaseDataLoader):
             num_workers=self.num_workers,
             sampler=sampler,
             collate_fn=self.collate_fn(subset="train"),
+            pin_memory=True,
         )
         return dataloader
 
@@ -205,5 +206,6 @@ class MultiDatasetsDepthDataLoader(BaseDataLoader):
             num_workers=self.num_workers,
             sampler=sampler,
             collate_fn=self.collate_fn(subset="val"),
+            pin_memory=True,
         )
         return dataloader
