@@ -6,7 +6,6 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from loguru import logger
-from typing import Union
 
 from nndepth.data.dataloaders import TartanairDisparityDataLoader
 from nndepth.models.raft_stereo import RAFTTrainer

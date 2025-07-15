@@ -25,7 +25,10 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
     rm /tmp/miniconda.sh
 ENV CONDA_HOME /opt/conda
 ENV PATH ${CONDA_HOME}/condabin:${CONDA_HOME}/bin:${PATH}
-RUN /opt/conda/bin/conda install -y python=${PYTHON_VERSION}
+RUN /opt/conda/bin/conda config --set channel_priority strict && \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
+    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
+    /opt/conda/bin/conda install -y python=${PYTHON_VERSION}
 RUN /opt/conda/bin/conda clean -ya
 
 # Stage 3: Install pytorch
@@ -58,12 +61,12 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 COPY --from=pytorch /opt/conda /opt/conda
 
-ENV PATH /opt/conda/bin:$PATH
-ENV NVIDIA_VISIBLE_DEVICES all
-ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
-ENV LD_LIBRARY_PATH /usr/local/nvidia/lib:/usr/local/nvidia/lib64
-ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH
-ENV PYTORCH_VERSION ${PYTORCH_VERSION}
+ENV PATH=/opt/conda/bin:$PATH
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+ENV PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH
+ENV PYTORCH_VERSION=${PYTORCH_VERSION}
 
 # Create cv user
 RUN useradd --create-home --uid 1000 --shell /bin/bash cv && usermod -aG sudo cv && echo "cv ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
