@@ -1,0 +1,5 @@
+dataset_dir: "/data/diml"
+HW: [384, 384]
+batch_size: 1
+num_workers: 4
+no_augmentation: true

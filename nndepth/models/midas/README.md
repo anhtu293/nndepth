@@ -104,8 +104,57 @@ python nndepth/models/midas/scripts/train.py mbnet_v3 --config_file nndepth/mode
 ## How to Launch Inference
 
 ```bash
+# For image output
+python nndepth/models/midas/scripts/inference.py mbnet_v3 \
+    --weights /path/to/model/weights.pth \
+    --input_path /path/to/input/image.png \
+    --output /path/to/output/ \
+    --HW 384 384 \
+    --viz_hw 480 640 \
+    --cmap magma
+
 ```
 
 ## How to Launch Evaluation
+
+### Dataset-specific Instructions
+
+#### TartanAir Dataset
 ```bash
+python nndepth/models/midas/scripts/evaluate.py mbnet_v3 \
+    --weights /path/to/model/weights.pth \
+    --data_name tartanair \
+    --data_config nndepth/models/midas/yaml/eval_tartanair.yaml \
+    --output tartanair_results.txt \
+    --max_depth 80.0
+```
+
+#### DIML Indoor Dataset
+```bash
+python nndepth/models/midas/scripts/evaluate.py mbnet_v3 \
+    --weights /path/to/model/weights.pth \
+    --data_name diml \
+    --data_config nndepth/models/midas/yaml/eval_diml.yaml \
+    --output diml_results.txt \
+    --max_depth 100.0
+```
+
+#### Hypersim Dataset
+```bash
+python nndepth/models/midas/scripts/evaluate.py mbnet_v3 \
+    --weights /path/to/model/weights.pth \
+    --data_name hypersim \
+    --data_config nndepth/models/midas/yaml/eval_hypersim.yaml \
+    --output hypersim_results.txt \
+    --max_depth 100.0
+```
+
+#### HRWSI Dataset
+```bash
+python nndepth/models/midas/scripts/evaluate.py mbnet_v3 \
+    --weights /path/to/model/weights.pth \
+    --data_name hrwsi \
+    --data_config nndepth/models/midas/yaml/eval_hrwsi.yaml \
+    --output hrwsi_results.txt \
+    --max_depth 100.0
 ```

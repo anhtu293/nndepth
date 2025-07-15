@@ -5,10 +5,11 @@ from loguru import logger
 from nndepth.utils.distributed_training import is_dist_initialized
 
 
-def load_weights(model: torch.nn.Module, weights: str, strict_load: bool = True, device=torch.device("cpu")):
+def load_weights(model: torch.nn.Module, weights: str, strict_load: bool = True):
     if weights.endswith(".safetensors"):
-        state_dict = load_file(weights, device=device)
+        state_dict = load_file(weights, device="cpu")
     else:
+        device = torch.device("cpu")
         state_dict = torch.load(weights, map_location=device)
     model.load_state_dict(state_dict, strict=strict_load)
     logger.info(f"Loaded weights from {weights}")

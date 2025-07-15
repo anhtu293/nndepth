@@ -70,7 +70,7 @@ class HRWSIDepthDataLoader(BaseDataLoader):
     def setup_train_dataloader(self) -> DataLoader:
         self.train_dataset = HRWSIDataset(
             dataset_dir=self.dataset_dir,
-            subsets=["train"],
+            subset="train",
         )
         sampler = (
             DistributedSampler(self.train_dataset) if is_dist_initialized() else RandomSampler(self.train_dataset)
@@ -89,7 +89,7 @@ class HRWSIDepthDataLoader(BaseDataLoader):
     def setup_val_dataloader(self):
         self.val_dataset = HRWSIDataset(
             dataset_dir=self.dataset_dir,
-            subsets=["val"],
+            subset="val",
         )
         sampler = (
             DistributedSampler(self.val_dataset) if is_dist_initialized() else RandomSampler(self.val_dataset)
