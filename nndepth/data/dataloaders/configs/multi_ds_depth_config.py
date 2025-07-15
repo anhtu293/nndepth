@@ -20,7 +20,13 @@ class HypersimDatasetConfig(BaseConfiguration):
     """Configuration for Hypersim dataset."""
 
     hypersim_dataset_dir: Annotated[str, "Path to the Hypersim dataset"] = "/data/hypersim"
-    hypersim_val_sequences: Annotated[List[str], "List of val sequences"] = ["ai_055_001", "ai_055_002", "ai_055_003", "ai_055_004", "ai_055_005", "ai_055_006", "ai_055_007", "ai_055_008", "ai_055_009", "ai_055_010"]
+    hypersim_val_sequences: Annotated[List[str], "List of val sequences"] = [
+        "ai_055_001",
+        "ai_055_002",
+        "ai_055_003",
+        "ai_055_004",
+        "ai_055_005",
+    ]
 
 
 class TartanairDatasetConfig(BaseConfiguration):
@@ -41,8 +47,8 @@ class MultiDSDepthDataConfig(BaseDataloaderConfig):
 
     dataset_names: Annotated[List[str], "List of dataset names"] = ["hrwsi", "tartanair", "diml", "hypersim"]
     HW: Annotated[List[int], "Height and width of the images"] = [384, 1248]
-    hrwsi_kwargs: Annotated[HRWSIDatasetConfig, "Keyword arguments for HRWSI dataset"] = HRWSIDatasetConfig()
-    tartanair_kwargs: Annotated[TartanairDatasetConfig, "Keyword arguments for Tartanair dataset"] = TartanairDatasetConfig()
-    diml_kwargs: Annotated[DimlDepthDatasetConfig, "Keyword arguments for DIML dataset"] = DimlDepthDatasetConfig()
-    hypersim_kwargs: Annotated[HypersimDatasetConfig, "Keyword arguments for Hypersim dataset"] = HypersimDatasetConfig()
+    hrwsi_kwargs: Annotated[HRWSIDatasetConfig, "Arguments for HRWSI dataset"] = HRWSIDatasetConfig()
+    tartanair_kwargs: Annotated[TartanairDatasetConfig, "Arguments for Tartanair dataset"] = TartanairDatasetConfig()
+    diml_kwargs: Annotated[DimlDepthDatasetConfig, "Arguments for DIML dataset"] = DimlDepthDatasetConfig()
+    hypersim_kwargs: Annotated[HypersimDatasetConfig, "Arguments for Hypersim dataset"] = HypersimDatasetConfig()
     no_augmentation: Annotated[bool, "Whether to use augmentation"] = False

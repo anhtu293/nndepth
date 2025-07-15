@@ -73,8 +73,8 @@ class BaseConfiguration:
                     if args:
                         resolved_type = args[0]
 
-                is_nested_config = (isinstance(resolved_type, type) and
-                                    issubclass(resolved_type, BaseConfiguration))
+                is_nested_config = (isinstance(resolved_type, type)
+                                    and issubclass(resolved_type, BaseConfiguration))
 
                 if is_nested_config:
                     # For nested configurations, create a new instance if default is a class
@@ -107,9 +107,9 @@ class BaseConfiguration:
                 expected_type = type_hints[key]
 
                 # Check if this is a nested BaseConfiguration
-                is_nested_config = (isinstance(expected_type, type) and
-                                    issubclass(expected_type, BaseConfiguration) and
-                                    isinstance(value, dict))
+                is_nested_config = (isinstance(expected_type, type)
+                                    and issubclass(expected_type, BaseConfiguration)
+                                    and isinstance(value, dict))
 
                 if is_nested_config:
                     # Recursively create nested configuration
@@ -304,8 +304,7 @@ class BaseConfiguration:
             resolved_type = type_hints.get(attr_name, raw_type)
 
             # Check if this is a nested BaseConfiguration using resolved type
-            is_nested_config = (isinstance(resolved_type, type) and
-                                issubclass(resolved_type, BaseConfiguration))
+            is_nested_config = (isinstance(resolved_type, type) and issubclass(resolved_type, BaseConfiguration))
 
             if is_nested_config:
                 # Recursively collect arguments from nested configuration

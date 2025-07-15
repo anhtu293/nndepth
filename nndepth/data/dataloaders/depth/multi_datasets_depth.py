@@ -106,7 +106,9 @@ class MultiDatasetsDepthDataLoader(BaseDataLoader):
             ds_dir = self.datasets_kwargs["hypersim"]["hypersim_dataset_dir"]
             sequences = sorted(os.listdir(ds_dir))
             sequences = [seq for seq in sequences if os.path.isdir(os.path.join(ds_dir, seq))]
-            sequences = [seq for seq in sequences if seq not in self.datasets_kwargs["hypersim"]["hypersim_val_sequences"]]
+            sequences = [
+                seq for seq in sequences if seq not in self.datasets_kwargs["hypersim"]["hypersim_val_sequences"]
+            ]
         else:
             sequences = self.datasets_kwargs["hypersim"]["hypersim_val_sequences"]
 

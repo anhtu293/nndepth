@@ -40,7 +40,7 @@ def main():
     args = parser.parse_args(sys.argv[2:])
 
     # Parse training config
-    training_config: Union[BaseRAFTTrainingConfig, RepViTRAFTStereoTrainingConfig] = training_config_cls.from_args(args)
+    training_config = training_config_cls.from_args(args)
 
     if args.save_config:
         training_config.save(args.save_config)

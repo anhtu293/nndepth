@@ -18,7 +18,11 @@ class RandomCrop(BaseAugmentation):
         if frame.disparity is not None:
             frame.disparity.data = frame.disparity.data[:, top:top + self.size[0], left:left + self.size[1]]
             if frame.disparity.occlusion is not None:
-                frame.disparity.occlusion = frame.disparity.occlusion[:, top:top + self.size[0], left:left + self.size[1]]
+                frame.disparity.occlusion = frame.disparity.occlusion[
+                    :,
+                    top:top + self.size[0],
+                    left:left + self.size[1],
+                ]
         if frame.depth is not None:
             frame.depth.data = frame.depth.data[:, top:top + self.size[0], left:left + self.size[1]]
             frame.depth.valid_mask = frame.depth.valid_mask[:, top:top + self.size[0], left:left + self.size[1]]
