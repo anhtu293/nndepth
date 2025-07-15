@@ -27,6 +27,6 @@ class MobilenetV3LargeEncoder(nn.Module):
             if self.feature_hooks is not None and i in self.feature_hooks:
                 features.append(x)
         if self.feature_hooks is None:
-            return features[-1]
+            return x
         else:
             return features
