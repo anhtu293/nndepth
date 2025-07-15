@@ -103,23 +103,23 @@ def trim_loss(losses: List[torch.Tensor], trim_ratio: float = 0.1) -> List[torch
     return trimmed_loss
 
 
-def average_loss(losses: List[torch.Tensor], valid_mask: torch.Tensor) -> torch.Tensor:
+def average_loss(losses: List[torch.Tensor]) -> torch.Tensor:
     """
     Average the loss
 
     Args:
         losses (List[torch.Tensor]): loss tensor. List of B elements, each of shape (N) with N being the
             number of valid pixels
-        valid_mask (torch.Tensor): valid mask tensor of shape (B, 1, H, W)
     Returns:
         torch.Tensor: average loss
     """
-    valid_pixels = torch.sum(valid_mask)
     total_loss_per_image = []
+    total_pixels = 0
     for i in range(len(losses)):
+        total_pixels += losses[i].shape[-1]
         total_loss_per_image.append(torch.sum(losses[i]))
     total_loss = torch.sum(torch.stack(total_loss_per_image, dim=0))
-    return total_loss / valid_pixels
+    return total_loss / total_pixels
 
 
 def gradient_regulizer(
@@ -201,7 +201,7 @@ class MiDasLoss(nn.Module):
         # Compute SSI trimmed loss
         mae = mae_loss(normalized_pred, normalized_target, valid_mask)
         trimed_mae = trim_loss(mae)
-        trimed_mae = average_loss(trimed_mae, valid_mask)
+        trimed_mae = average_loss(trimed_mae)
 
         # Compute SSI gradient matching loss
         gradient_reg = gradient_regulizer(normalized_target, normalized_pred, valid_mask)
