@@ -122,12 +122,12 @@ python train.py --config_file PATH_TO_YAML_FILE --ARG_TO_OVERRIDE VALUE_TO_OVERR
 - [x] Inference script
 - [x] Evaluation script
 - [x] More datasets: DIML, Hypersym
+- [x] [MiDaS](https://arxiv.org/abs/1907.01341)
 - [ ] More lightweight feature extractor with pretrained weights (MobilenetV4, mobileone, etc.)
-- [ ] [MiDaS](https://arxiv.org/abs/1907.01341)
+- [ ] [DepthAnything](https://arxiv.org/pdf/2401.10891)
 - [ ] [ZoeDepth](https://arxiv.org/abs/2302.12288)
 - [ ] [Metric3D](https://jugghm.github.io/Metric3Dv2/)
 - [ ] [Unidepth](https://github.com/lpiccinelli-eth/unidepth)
-- [ ] [DepthAnything](https://arxiv.org/pdf/2401.10891)
 
 ## 6. Acknowledgements
 - [CreStereo](https://github.com/megvii-research/CREStereo)
