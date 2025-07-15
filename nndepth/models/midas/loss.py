@@ -190,26 +190,25 @@ class MiDasLoss(nn.Module):
             Tuple[torch.Tensor, dict]: loss and metrics
         """
         # Compute SSI trimmed loss
-        gt_scale, gt_shift = scale_shift_estimation(target, valid_mask)
-        ssi_target = ssi_depth(target, gt_scale, gt_shift)
-        normalized_target = normalize_01_depth(ssi_target, valid_mask)
+        normalized_target = normalize_01_depth(target, valid_mask)
+        gt_scale, gt_shift = scale_shift_estimation(normalized_target, valid_mask)
+        ssi_target = ssi_depth(normalized_target, gt_scale, gt_shift)
 
         pred_scale, pred_shift = scale_shift_estimation(pred, valid_mask)
         ssi_pred = ssi_depth(pred, pred_scale, pred_shift)
-        normalized_pred = normalize_01_depth(ssi_pred, valid_mask)
 
         # Compute SSI trimmed loss
-        mae = mae_loss(normalized_pred, normalized_target, valid_mask)
+        mae = mae_loss(ssi_pred, ssi_target, valid_mask)
         trimed_mae = trim_loss(mae)
         trimed_mae = average_loss(trimed_mae)
 
         # Compute SSI gradient matching loss
-        gradient_reg = gradient_regulizer(normalized_target, normalized_pred, valid_mask)
+        gradient_reg = gradient_regulizer(normalized_target, ssi_pred, valid_mask)
 
         loss = trimed_mae * self.trimmed_loss_coef + gradient_reg * self.gradient_reg_coef
 
         # Absolute deviation
-        abs_dev = torch.abs(normalized_pred - normalized_target)
+        abs_dev = torch.abs(ssi_pred - ssi_target)
         abs_dev = abs_dev[valid_mask]
         abs_dev = abs_dev.mean()
 

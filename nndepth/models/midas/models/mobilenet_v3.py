@@ -37,6 +37,7 @@ class MobileNetV3DepthModel(BaseDepthModel):
             nn.Conv2d(self.feature_channels, self.feature_channels, kernel_size=3, padding=1, stride=1),
             nn.ReLU(),
             nn.Conv2d(self.feature_channels, 1, kernel_size=1, padding=0, stride=1),
+            nn.ReLU(),
         )
 
     def forward_encoder(self, x: torch.Tensor) -> torch.Tensor | list[torch.Tensor]:

@@ -153,13 +153,13 @@ class MultiDatasetsDepthDataLoader(BaseDataLoader):
         if not self.no_augmentation:
             frame = self.train_augmentation(frame)
         else:
-            frame = frame.resize(self.HW, depth_resize_method="maxpool")
+            frame = frame.resize(self.HW)
         frame.data = (frame.data - 127.5) / 127.5
         frame.depth = frame.depth.inverse(clip_max=None, clip_min=None)
         return frame
 
     def val_transform(self, frame: Frame) -> Frame:
-        frame = frame.resize(self.HW, depth_resize_method="maxpool")
+        frame = frame.resize(self.HW)
         frame.data = (frame.data - 127.5) / 127.5
         frame.depth = frame.depth.inverse(clip_max=None, clip_min=None)
         return frame

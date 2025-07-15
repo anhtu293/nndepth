@@ -26,6 +26,7 @@ def parse_args(model_name: str):
     parser = argparse.ArgumentParser()
     parser = MODEL_CONFIG_CLS[model_name].add_args(parser)
     parser.add_argument("--compile", action="store_true", help="Whether to compile the model")
+    parser.add_argument("--overfit", action="store_true", help="Whether to overfit the model")
     parser.add_argument("--save_config", default=None, help="Path to save the config")
 
     args = parser.parse_args(sys.argv[2:])
@@ -63,7 +64,10 @@ def main(args: Namespace, model_name: str):
     trainer = MiDasTrainer(model, **training_config.trainer.to_dict())
 
     # Train
-    trainer.train(data_module.train_dataloader, data_module.val_dataloader)
+    if args.overfit:
+        trainer.train(data_module.val_dataloader, data_module.val_dataloader)
+    else:
+        trainer.train(data_module.train_dataloader, data_module.val_dataloader)
 
 
 if __name__ == "__main__":

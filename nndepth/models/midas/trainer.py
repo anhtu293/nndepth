@@ -139,13 +139,14 @@ class MiDasTrainer(BaseTrainer):
         pred_depth_view = Depth(pred_depth[0], valid_mask[0]).get_view(cmap="magma")
 
         # Error map
-        gt_scale, gt_shift = scale_shift_estimation(gt, valid_mask)
-        gt_ssi = ssi_depth(gt, gt_scale, gt_shift)
-        gt_normalized = normalize_01_depth(gt_ssi, valid_mask)
-        pred_ssi = ssi_depth(pred_depth, gt_scale, gt_shift)
-        pred_normalized = normalize_01_depth(pred_ssi, valid_mask)
+        gt_normalized = normalize_01_depth(gt, valid_mask)
+        gt_scale, gt_shift = scale_shift_estimation(gt_normalized, valid_mask)
+        gt_ssi = ssi_depth(gt_normalized, gt_scale, gt_shift)
 
-        abs_dev = torch.abs(pred_normalized - gt_normalized)
+        pred_scale, pred_shift = scale_shift_estimation(pred_depth, valid_mask)
+        pred_ssi = ssi_depth(pred_depth, pred_scale, pred_shift)
+
+        abs_dev = torch.abs(pred_ssi - gt_ssi)
         min_abs_dev = abs_dev[valid_mask].min()
         max_abs_dev = abs_dev[valid_mask].max()
         abs_dev = (abs_dev - min_abs_dev) / (max_abs_dev - min_abs_dev)
@@ -328,6 +329,7 @@ class MiDasTrainer(BaseTrainer):
         Returns:
             dict: metrics of the evaluation
         """
+        logger.info("Evaluating...")
         val_metrics = {}
         for i_batch, batch in enumerate(tqdm(dataloader, desc="Evaluating")):
             if self.num_val_samples is not None and i_batch >= self.num_val_samples:
