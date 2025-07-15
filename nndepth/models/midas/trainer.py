@@ -45,7 +45,7 @@ class MiDasTrainer(BaseTrainer):
                 logger.warning("Bfloat16 is not supported on this machine. Using float32 instead.")
                 self.dtype = torch.float32
         else:
-            self.dtype = dtype
+            self.dtype = torch.float32
 
         self.optimizer = self.build_optimizer()
         self.loss_fn = self.build_loss_fn()
@@ -282,7 +282,7 @@ class MiDasTrainer(BaseTrainer):
                 if (self.viz_log_interval > 0) and (self.current_step % self.viz_log_interval) == 0:
                     self.log_viz(batch, outputs, stage="train")
 
-                if self.reach_eval_interval(len(val_loader)):
+                if self.reach_eval_interval(len(train_loader)):
                     if is_dist_initialized():
                         dist.barrier()
 

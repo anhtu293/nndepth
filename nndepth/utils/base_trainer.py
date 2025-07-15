@@ -666,7 +666,7 @@ class BaseTrainer(ABC):
         if isinstance(self.val_interval, int):
             val_interval_steps = self.val_interval
         elif isinstance(self.val_interval, float) and self.val_interval <= 1:
-            val_interval_steps = int(self.val_interval * dataloader_length)
+            val_interval_steps = int(self.val_interval * dataloader_length // self.gradient_accumulation_steps)
         else:
             raise ValueError("val_interval must be either int or float <= 1")
 
