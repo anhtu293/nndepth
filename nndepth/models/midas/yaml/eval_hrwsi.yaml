@@ -1,0 +1,4 @@
+dataset_dir: "/data/hrwsi"
+HW: [384, 384]
+batch_size: 1
+num_workers: 4

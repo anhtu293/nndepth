@@ -3,16 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from nndepth.blocks.update_block import BasicUpdateBlock
-from nndepth.extractors.basic_encoder import BasicEncoder
+from nndepth.encoders.basic_encoder import BasicEncoder
 from nndepth.models.cre_stereo.cost_volume import AGCL
 
 from nndepth.blocks.pos_enc import PositionEncodingSine
 from nndepth.blocks.transformer import LocalFeatureTransformer
 
-from nndepth.utils import load_weights, BaseModel
+from nndepth.utils import load_weights
 
 
-class CREStereoBase(BaseModel):
+class CREStereoBase(nn.Module):
     """CreStereo: https://arxiv.org/abs/2203.11483"""
 
     SUPPORTED_FNET_CLS = {"basic_encoder": {"cls": BasicEncoder, "downsample": 8}}

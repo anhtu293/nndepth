@@ -1,17 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Optional
 
-from nndepth.extractors.mobilenetv3_encoder import MobilenetV3LargeEncoder
+from nndepth.encoders.mobilenetv3_encoder import MobilenetV3LargeEncoder
 from nndepth.blocks.update_block import BasicUpdateBlock
 from nndepth.models.igev_stereo.cost_volume import (
     GeometryAwareCostVolume,
     CostVolumeFilterNetwork,
 )
-from nndepth.utils import load_weights, BaseModel
+from nndepth.utils import load_weights
 
 
-class IGEVStereoBase(BaseModel):
+class IGEVStereoBase(nn.Module):
     """IGEV Stereo: https://arxiv.org/pdf/2303.06615.pdf"""
 
     SUPPORTED_UPDATE_CLS = {"basic_update_block": BasicUpdateBlock}
@@ -27,7 +28,7 @@ class IGEVStereoBase(BaseModel):
         corr_radius: int = 4,
         tracing: bool = False,
         include_preprocessing: bool = False,
-        weights: str = None,
+        weights: Optional[str] = None,
         strict_load: bool = True,
     ):
         """

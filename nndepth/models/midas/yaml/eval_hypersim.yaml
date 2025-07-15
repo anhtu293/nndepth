@@ -1,0 +1,16 @@
+dataset_dir: "/data/hypersim"
+HW: [384, 384]
+batch_size: 1
+num_workers: 4
+val_sequences:
+  - ai_055_001
+  - ai_055_002
+  - ai_055_003
+  - ai_055_004
+  - ai_055_005
+  - ai_055_006
+  - ai_055_007
+  - ai_055_008
+  - ai_055_009
+  - ai_055_010
+no_augmentation: true

@@ -1,0 +1,7 @@
+dataset_dir: /data/kitti/stereo_2015
+HW:
+- 375
+- 1242
+
+batch_size: 5
+num_workers: 8

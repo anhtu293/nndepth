@@ -5,6 +5,7 @@ import cv2
 from loguru import logger
 from typing import List, Tuple, Dict
 
+from .base_dataset import BaseDataset
 from nndepth.scene import Frame, Disparity, Depth, Camera
 from nndepth.data.datasets.utils.geometry_trans import pos_quat2SE
 
@@ -19,12 +20,11 @@ def sequence_indices(n_samples, seq_size, seq_skip):
         yield sequence_index(start, seq_size)
 
 
-class TartanairDataset:
+class TartanairDataset(BaseDataset):
 
     CAMERAS = ["left", "right"]
     LABELS = ["disparity", "depth", "segmentation"]
 
-    LOADING_RETRY_LIMIT = 10
     FX = 320
     FY = 320
     BASELINE = 0.25
@@ -40,12 +40,12 @@ class TartanairDataset:
         sequence_skip: int = 0,
         start_from: int = 0,
         pose_format: str = "NED",
+        **kwargs,
     ):
         """
         Dataset for Tartanair dataset
 
-        Parameters
-        ----------
+        Args:
             dataset_dir (str): path to the dataset
             envs (List[str]): list of environments
             sequences (Dict[str, List[str])]: list of sequences per evironment
@@ -57,12 +57,7 @@ class TartanairDataset:
             pose_format (str): pose format
             get_cameras_fn (Callable): function to get cameras
 
-        Returns
-        -------
-            None
-
-        Examples
-        --------
+        Examples:
         >>> import cv2
         >>> dataset = TartanairDataset(
                 dataset_dir="/data/tartanair",
@@ -83,7 +78,7 @@ class TartanairDataset:
         >>> cv2.imshow("depth", viz_depth)
         >>> cv2.imshow("disparity", viz_disparity)
         """
-        super().__init__()
+        super().__init__(**kwargs)
         assert os.path.exists(dataset_dir), f"Dataset directory {dataset_dir} does not exist"
         assert pose_format in ["NED", "camera"], "pose_format should be in {'NED', 'camera'}"
         assert cameras is None or all([cam in self.CAMERAS for cam in cameras]), f"cameras should be in {self.CAMERAS}"
@@ -106,7 +101,7 @@ class TartanairDataset:
 
         self.sequence_to_camera_pos = {}
 
-        env_seq_levels = self._get_items(envs)
+        env_seq_levels = self.init_items(envs)
         for env, seq, level in env_seq_levels:
             data_dir = os.path.join(self.dataset_dir, env, env, level, seq)
 
@@ -175,7 +170,7 @@ class TartanairDataset:
             sequences = all_sequences
         return sorted(sequences)
 
-    def _get_items(self, envs: List[str]) -> List[Tuple[str, str, str]]:
+    def init_items(self, envs: List[str]) -> List[Tuple[str, str, str]]:
         envs = self._get_envs() if envs is None else envs
 
         env_seq_level = []
@@ -229,7 +224,8 @@ class TartanairDataset:
                 f"{frame_id:06d}_{side}_depth.npy",
             )
             depth = torch.Tensor(np.expand_dims(np.load(depth_path), axis=0))
-            depth = Depth(data=depth)
+            valid_mask = depth > 0
+            depth = Depth(data=depth, valid_mask=valid_mask)
             frame.depth = depth
 
         # load disparity from depth
@@ -252,7 +248,7 @@ class TartanairDataset:
         T_inv = np.linalg.inv(T)
         return T @ P @ T_inv
 
-    def __getitem__(self, idx: int) -> Dict[str, list[torch.Tensor]]:
+    def get_item(self, idx: int) -> Dict[str, list[torch.Tensor]]:
         nb_retry = 0
         while nb_retry < self.LOADING_RETRY_LIMIT:
             try:

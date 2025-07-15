@@ -52,6 +52,13 @@ class Frame:
         disparity_resize_kwargs: dict = {},
         depth_resize_kwargs: dict = {},
     ):
+        assert depth_resize_method in ["interpolate", "maxpool", "minpool"], (
+            "depth_resize_method must be in [`interpolate`, `maxpool`, `minpool`]"
+        )
+        assert disparity_resize_method in ["interpolate", "maxpool", "minpool"], (
+            "disparity_resize_method must be in [`interpolate`, `maxpool`, `minpool`]"
+        )
+
         # Resize image
         ndim = self.data.ndim
         assert ndim <= 4, "Only support resize tensor with 3 or 4 dimensions"

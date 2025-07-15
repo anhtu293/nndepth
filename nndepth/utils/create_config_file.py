@@ -16,18 +16,15 @@ def write_config_file_and_doc(
 ):
     """Create a config file for a class.
 
-    Parameters
+    Args:
         file (TextIOWrapper): File to write the configuration file to.
         cls_type (Type, optional): Class to create the config file for. Defaults to None.
         module_path (str, optional): Path to the module containing the class. Defaults to None.
         cls_name (str, optional): Name of the class. Defaults to None.
-        config (dict, optional): Configuration dictionary. Defaults to None.
-        docstring (str, optional): Docstring for the class. Defaults to None.
         ignored_base_classes (List[str], optional): List of base classes to ignore. Defaults to ["object", "Module"].
 
     Returns:
-        dict, str: Configuration dictionary and docstring.
-
+        None: This function writes the configuration file to the given file.
     """
     assert cls_type is not None or (
         module_path is not None and cls_name is not None

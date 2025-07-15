@@ -1,19 +1,24 @@
-from argparse import ArgumentParser
 import torch
+from safetensors.torch import load_file
 from loguru import logger
 
-
-def add_common_args(parser: ArgumentParser) -> ArgumentParser:
-    parser.add_argument("--model_config", required=True, help="Path to model config file")
-    parser.add_argument("--data_config", required=True, help="Path to data config file")
-    parser.add_argument("--training_config", required=True, help="Path to training config file")
-    parser.add_argument("--resume_from_checkpoint", default=None, help="Path to checkpoint to resume.")
-    parser.add_argument("--compile", action="store_true", help="Compile the model.")
-    return parser
+from nndepth.utils.distributed_training import is_dist_initialized
 
 
-def load_weights(model: torch.nn.Module, weights: str, strict_load: bool = True, device=torch.device("cpu")):
-    state_dict = torch.load(weights, map_location=device)
+def load_weights(model: torch.nn.Module, weights: str, strict_load: bool = True):
+    if weights.endswith(".safetensors"):
+        state_dict = load_file(weights, device="cpu")
+    else:
+        device = torch.device("cpu")
+        state_dict = torch.load(weights, map_location=device)
     model.load_state_dict(state_dict, strict=strict_load)
     logger.info(f"Loaded weights from {weights}")
     return model
+
+
+def get_model_state_dict(model: torch.nn.Module):
+    if is_dist_initialized():
+        model_state_dict = getattr(model.module, '_orig_mod', model.module).state_dict()
+    else:
+        model_state_dict = getattr(model, '_orig_mod', model).state_dict()
+    return model_state_dict

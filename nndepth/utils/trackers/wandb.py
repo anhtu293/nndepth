@@ -1,6 +1,7 @@
 import os
 import wandb
 import json
+import numpy as np
 from typing import Optional
 
 
@@ -19,7 +20,7 @@ class WandbTracker(object):
         """
         WandbLogger class to log data to Weights and Biases platform
 
-        Parameters
+        Args:
             project_name (str): Name of the project
             run_name (str): Name of the run
             root_log_dir (str, optional): Root directory to save logs. Defaults to None.
@@ -39,7 +40,7 @@ class WandbTracker(object):
         if root_log_dir is None:
             self.log_dir = os.path.join("wandb", self.project_name, self.run_name, "wandb")
         else:
-            self.log_dir = os.path.join(root_log_dir, "wandb")
+            self.log_dir = os.path.join(root_log_dir, self.project_name, self.run_name, "wandb")
         os.makedirs(self.log_dir, exist_ok=True)
 
         run_unique_id = wandb.util.generate_id()
@@ -73,11 +74,35 @@ class WandbTracker(object):
         wandb.define_metric("train/*", step_metric="train/step")
         wandb.define_metric("val/*", step_metric="train/step")
 
-    def log(self, data: dict):
+    def log_scalar(self, key: str, value: float, step: int):
         """
         Log data to wandb
 
-        Parameters
-            data (dict): Data to log
+        Args:
+            key (str): Key to log
+            value (float): Value to log
+            step (int): Step
         """
-        self.run.log(data)
+        self.run.log({key: value, "train/step": step})
+
+    def log_image(self, key: str, image: np.ndarray, step: int):
+        """
+        Log image to wandb
+
+        Args:
+            key (str): Key to log
+            image (np.ndarray): Image to log
+            step (int): Step
+        """
+        self.run.log({key: wandb.Image(image), "train/step": step})
+
+    def log_table(self, key: str, data: dict, step: int):
+        """
+        Log table to wandb
+
+        Args:
+            key (str): Key to log
+            data (dict): Data to log
+            step (int): Step
+        """
+        self.run.log({key: wandb.Table(data=data), "train/step": step})

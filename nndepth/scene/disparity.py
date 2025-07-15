@@ -14,31 +14,24 @@ def maxpool_disp(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Apply maxpool to disparity
 
-    Parameters
-    ----------
-    disp : torch.Tensor
-        Input disparity tensor
-    size : Tuple[int, int]
-        Target size (H, W) for the output disparity
-    disp_sign : str
-        disp_sign of the disparity, either "positive" or "negative"
-    **kwargs : dict
-        Additional keyword arguments for interpolation
+    Args:
+        disp (torch.Tensor): Input disparity tensor
+        size (Tuple[int, int]): Target size (H, W) for the output disparity
+        disp_sign (str): disp_sign of the disparity, either "positive" or "negative"
+        **kwargs (dict): Additional keyword arguments for interpolation
 
-    Returns
-    -------
-    Tuple[torch.Tensor, torch.Tensor]
-        A tuple containing:
-        - new_disp: The resized disparity tensor
-        - indices: The indices of the maximum values (useful for resizing occlusion mask)
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+            - new_disp (torch.Tensor): The resized disparity tensor
+            - indices (torch.Tensor): The indices of the maximum values (useful for resizing occlusion mask)
 
-    Notes
-    -----
+    Notes:
     This function first applies max pooling to the absolute value of the disparity,
     then adjusts the disp_sign if necessary, and finally interpolates if the resulting
     size doesn't match the target size.
     """
     assert disp.ndim == 4, "Only support resize disparity with maxpool with 4 dimensions"
+    assert disp_sign in ["positive", "negative"], "disp_sign must be either 'positive' or 'negative'"
 
     current_HW = disp.shape[-2:]
     kernel = (current_HW[0] // size[0], current_HW[1] // size[1])
@@ -53,26 +46,18 @@ def maxpool_disp(
 def minpool_disp(disp: torch.Tensor, size: Tuple[int, int], disp_sign: str, **kwargs) -> torch.Tensor:
     """Apply minpool to disparity
 
-    Parameters
-    ----------
-    disp : torch.Tensor
-        Input disparity tensor
-    size : Tuple[int, int]
-        Target size (H, W) for the output disparity
-    disp_sign : str
-        disp_sign of the disparity, either "positive" or "negative"
-    **kwargs : dict
-        Additional keyword arguments for interpolation
+    Args:
+        disp (torch.Tensor): Input disparity tensor
+        size (Tuple[int, int]): Target size (H, W) for the output disparity
+        disp_sign (str): disp_sign of the disparity, either "positive" or "negative"
+        **kwargs (dict): Additional keyword arguments for interpolation
 
-    Returns
-    -------
-    Tuple[torch.Tensor, torch.Tensor]
-        A tuple containing:
-        - new_disp: The resized disparity tensor
-        - indices: The indices of the maximum values (useful for resizing occlusion mask)
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+            - new_disp (torch.Tensor): The resized disparity tensor
+            - indices (torch.Tensor): The indices of the maximum values (useful for resizing occlusion mask)
 
-    Notes
-    -----
+    Notes:
     This function first applies min pooling to the absolute value of the disparity,
     then adjusts the sign if necessary, and finally interpolates if the resulting
     size doesn't match the target size.
@@ -125,11 +110,9 @@ class Disparity:
     def resize(self, size: Tuple[int, int], method: str = "interpolate", **resize_kwargs):
         """Resize disparity
 
-        Parameters
-        ----------
-        size : tuple of float
-            target size (H, W) in relative coordinates between 0 and 1
-        method: str
+        Args:
+            size (Tuple[int, int]): target size (H, W) in relative coordinates between 0 and 1
+            method (str): Method to resize disparity. Choices: `interpolate`, `maxpool`, `minpool`.
             Method to resize disparity. Choices: `interpolate`, `maxpool`, `minpool`.
             `Interpolate`: A pixel in resized disparity will be an interpolation of its neighbor pixels. This method
                 will create artifact in resized disparity map.
@@ -139,12 +122,10 @@ class Disparity:
             `minpool`: A pixel in resized disparity will be the min value of its neighbor pixels. This means that the
                 method will prefer points whose depth is large (absolute of disparity is small).
                 This technique reduce the artifacts. Only available for downsampling.
-        resize_kwargs: Additional arguments for resize methods
+            resize_kwargs (dict): Additional arguments for resize methods
 
-        Returns
-        -------
-        disp_resized : Disparity
-            resized version of disparity map
+        Returns:
+            Disparity: resized version of disparity map
         """
         assert method in ["interpolate", "maxpool", "minpool"], (
             "method must be in [`interpolate`, `maxpool`, `minpool`]"
@@ -209,22 +190,18 @@ class Disparity:
         """
         Get a colored visualization of the disparity map.
 
-        Parameters
-        ----------
-        min : float, optional
-            Minimum absolute disparity value for normalization. If None, uses the minimum value in the data.
-        max : float, optional
-            Maximum absolute disparity value for normalization. If None, uses the maximum value in the data.
-        cmap : str or matplotlib.colors.Colormap, optional
-            Colormap to use for visualization. Default is "nipy_spectral".
+        Args:
+            min (float): Minimum absolute disparity value for normalization.
+                If None, uses the minimum value in the data.
+            max (float): Maximum absolute disparity value for normalization.
+                If None, uses the maximum value in the data.
+            cmap (str or matplotlib.colors.Colormap): Colormap to use for visualization. Default is "nipy_spectral".
             If "red2green", a custom colormap from red to white to green is used.
-        reverse : bool, optional
-            If True, reverses the colormap. Default is False.
+            reverse (bool): If True, reverses the colormap. Default is False.
 
-        Returns
-        -------
-        Union[np.ndarray, List[np.ndarray]]
-            The colored visualization of the disparity map or a list of visualization in case of batch disparity
+        Returns:
+            Union[np.ndarray, List[np.ndarray]]: The colored visualization of the disparity map or a list of
+            visualization in case of batch disparity
         """
         assert self.data.ndim <= 4, "Only support get_view for disparity with 3 or 4 dimensions"
 

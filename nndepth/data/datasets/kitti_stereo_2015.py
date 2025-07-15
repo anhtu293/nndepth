@@ -5,6 +5,7 @@ import numpy as np
 from typing import Dict, Union
 
 from nndepth.scene import Frame, Disparity, Camera
+from .base_dataset import BaseDataset
 
 
 # https://github.com/utiasSTARS/pykitti/tree/master
@@ -107,7 +108,7 @@ def load_calib_cam_to_cam(cam_to_cam_filepath, velo_to_cam_file: Union[str, None
     return data
 
 
-class KittiStereo2015:
+class KittiStereo2015(BaseDataset):
     SPLIT_FOLDERS = {"train": "training", "val": "testing"}
     LABELS = ["right", "disp_noc", "disp_occ"]
     CAMERAS = ["left", "right"]
@@ -120,41 +121,32 @@ class KittiStereo2015:
         sequence_end=11,
         cameras: list = ["left", "right"],
         labels: list = ["disp_occ"],
+        **kwargs,
     ):
         """
         Stereo Tasks from Kitti 2015 dataset.
-        Parameters
-        ----------
-        name : str
-            Name of the dataset
-        sequence_start : int
-            20 images are available for each item. Only image 10 and 11 are annotated.
-            sequence_start is the first image to load.
-        sequence_end : int
-            sequence_end is the last image to load.
-        grayscale : bool
-            If True, load images in grayscale.
-        labels : List[str]
-            List of data to load. Available data are:
-            - right: right image
-            - disp_noc: disparity map without occlusions
-            - disp_occ: disparity map with occlusions
-        split : Split
-            Split of the dataset. Can be `Split.TRAIN` or `Split.TEST`.
 
-        Examples
-        --------
-        >>> # Visualize a sample
+        Args:
+            dataset_dir (str): Path to the dataset directory.
+            subset (str): Split of the dataset. Can be `train` or `val`.
+            sequence_start (int): 20 images are available for each item. Only image 10 and 11 are annotated.
+            sequence_start is the first image to load.
+            sequence_end (int): sequence_end is the last image to load.
+            cameras (list): List of cameras to load. Can be `left` or `right`.
+            labels (list): List of data to load. Available data are: `disp_noc`, `disp_occ`.
+
+        Examples:
         >>> from random import randint
         >>> import cv2
-        >>> dataset = KittiStereo2015(sequence_start=10, sequence_end=10)
+        >>> dataset = KittiStereo2015(subset="train", sequence_start=10, sequence_end=10)
         >>> obj = dataset[randint(0, len(dataset))]
         >>> frame = obj["left"][0]
         >>> disps = torch.stack([frame.disparity, frame.disparity], dim=0)
         >>> disp_viz = disps.get_view()
         >>> cv2.imshow("disp", disp_viz[0])
         """
-        super().__init__()
+        super().__init__(**kwargs)
+
         assert subset in ["train", "val"], "subset must be in [`train`, `val`]"
         assert not ("disp_noc" in labels and "disp_occ" in labels), (
             "only 1 disparity (`disp_occ` or `disp_noc`) can be passed to labels"
@@ -214,20 +206,16 @@ class KittiStereo2015:
             extrinsic = np.append(rotation, translation, axis=1)
             return torch.Tensor(np.append(extrinsic, np.array([[0, 0, 0, 1]]), axis=0))
 
-    def __getitem__(self, idx) -> Dict[str, Frame]:
+    def get_item(self, idx) -> Dict[str, Frame]:
         """
         Load a sequence of frames from the dataset.
 
-        Parameters
-        ----------
-        idx : int
-            Index of the sequence.
+        Args:
+            idx (int): Index of the sequence.
 
-        Returns
-        -------
-        Dict[str, List[Frame]]
-            Dictionary of index beetween sequance_start and sequance_end.\n
-            Each index is a list of frames.
+        Returns:
+            Dict[str, List[Frame]]: Dictionary of index beetween sequance_start and sequance_end.
+                Each index is a list of frames.
         """
         sequence: Dict[int, Dict[str, Frame]] = {}
         calib = self._load_calib(self.split_folder, idx)
